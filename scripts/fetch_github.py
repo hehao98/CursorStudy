@@ -27,9 +27,6 @@ import pandas as pd
 from dotenv import load_dotenv
 from github import Github, RateLimitExceededException
 
-# Load environment variables from .env file
-load_dotenv()
-
 # Settings for the search
 QUERY = "path:.cursorrules OR path:.cursor/"
 MAX_RETRIES = 5
@@ -87,19 +84,14 @@ def get_github_token():
     Raises:
         ValueError: If no token is found
     """
+    # Load environment variables from .env file
+    load_dotenv(override=True)
     token = os.getenv("GITHUB_TOKEN")
-    if token is None:
-        # Try to load from .env in the project root if not in current directory
-        root_env_path = Path(__file__).parent.parent / ".env"
-        if root_env_path.exists():
-            load_dotenv(dotenv_path=root_env_path)
-            token = os.getenv("GITHUB_TOKEN")
 
     if token is None:
         raise ValueError(
             "GitHub token not provided. Add GITHUB_TOKEN to your .env file."
         )
-
     return token
 
 
