@@ -1,42 +1,27 @@
 repo_name,repo_stars,repo_forks,repo_created,repo_updated,repo_description
 ant-design/ant-design,94113,51747,2015-04-24T15:37:24+00:00,2025-03-30T16:39:29+00:00,An enterprise-class UI design language and React UI library
-ant-design/ant-design,94113,51746,2015-04-24T15:37:24+00:00,2025-03-30T16:39:29+00:00,An enterprise-class UI design language and React UI library
 storybookjs/storybook,86254,9484,2016-03-18T04:23:44+00:00,2025-03-30T10:44:03+00:00,"Storybook is the industry standard workshop for building, documenting, and testing UI components in isolation"
 oven-sh/bun,77149,2995,2021-04-14T00:48:17+00:00,2025-03-30T18:02:07+00:00,"Incredibly fast JavaScript runtime, bundler, test runner, and package manager – all in one"
-oven-sh/bun,77148,2995,2021-04-14T00:48:17+00:00,2025-03-30T16:18:27+00:00,"Incredibly fast JavaScript runtime, bundler, test runner, and package manager – all in one"
 maybe-finance/maybe,42539,3047,2024-01-01T22:23:46+00:00,2025-03-30T19:22:26+00:00,The OS for your personal finances
-maybe-finance/maybe,42537,3047,2024-01-01T22:23:46+00:00,2025-03-30T18:19:16+00:00,The OS for your personal finances
-maybe-finance/maybe,42534,3047,2024-01-01T22:23:46+00:00,2025-03-30T14:10:22+00:00,The OS for your personal finances
 getsentry/sentry,40423,4297,2010-08-30T22:06:41+00:00,2025-03-30T16:29:00+00:00,Developer-first error tracking and performance monitoring
 twentyhq/twenty,27360,2986,2022-12-01T13:04:40+00:00,2025-03-30T19:22:00+00:00,"Building a modern alternative to Salesforce, powered by the community."
-twentyhq/twenty,27356,2986,2022-12-01T13:04:40+00:00,2025-03-30T18:03:32+00:00,"Building a modern alternative to Salesforce, powered by the community."
-twentyhq/twenty,27355,2986,2022-12-01T13:04:40+00:00,2025-03-30T17:39:12+00:00,"Building a modern alternative to Salesforce, powered by the community."
-twentyhq/twenty,27354,2986,2022-12-01T13:04:40+00:00,2025-03-30T17:37:57+00:00,"Building a modern alternative to Salesforce, powered by the community."
-twentyhq/twenty,27353,2986,2022-12-01T13:04:40+00:00,2025-03-30T17:25:59+00:00,"Building a modern alternative to Salesforce, powered by the community."
 PostHog/posthog,25373,1571,2020-01-23T22:46:58+00:00,2025-03-30T17:44:53+00:00,"🦔 PostHog provides open-source web & product analytics, session recording, feature flagging and A/B testing that you can self-host. Get started - free."
-PostHog/posthog,25373,1571,2020-01-23T22:46:58+00:00,2025-03-30T19:22:39+00:00,"🦔 PostHog provides open-source web & product analytics, session recording, feature flagging and A/B testing that you can self-host. Get started - free."
-PostHog/posthog,25372,1571,2020-01-23T22:46:58+00:00,2025-03-30T18:12:43+00:00,"🦔 PostHog provides open-source web & product analytics, session recording, feature flagging and A/B testing that you can self-host. Get started - free."
 Wox-launcher/Wox,25303,2370,2013-12-19T15:49:32+00:00,2025-03-30T16:33:36+00:00,A cross-platform launcher that simply works
-Wox-launcher/Wox,25302,2370,2013-12-19T15:49:32+00:00,2025-03-30T14:34:33+00:00,A cross-platform launcher that simply works
 grafana/loki,25087,3617,2018-04-16T09:22:48+00:00,2025-03-30T17:17:49+00:00,"Like Prometheus, but for logs."
 vulhub/vulhub,18577,4563,2017-04-09T10:13:13+00:00,2025-03-30T18:44:38+00:00,Pre-Built Vulnerable Environments Based on Docker-Compose
 reactos/reactos,15311,1820,2017-10-03T08:04:52+00:00,2025-03-30T15:16:06+00:00,A free Windows-compatible Operating System
-reactos/reactos,15311,1819,2017-10-03T08:04:52+00:00,2025-03-30T15:16:06+00:00,A free Windows-compatible Operating System
 lss233/kirara-ai,14837,1655,2022-12-05T13:14:58+00:00,2025-03-30T17:20:19+00:00,🤖 可 DIY 的 多模态 AI 聊天机器人 | 🚀 快速接入 微信、 QQ、Telegram、等聊天平台 | 🦈支持DeepSeek、Grok、Claude、Ollama、Gemini、OpenAI | 工作流系统、网页搜索、AI画图、人设调教、虚拟女仆、语音对话 |
 udecode/plate,13339,814,2019-12-02T01:40:10+00:00,2025-03-30T13:26:40+00:00,A rich-text editor powered by AI
 Automattic/wp-calypso,12469,1992,2015-11-10T20:00:16+00:00,2025-03-30T00:42:17+00:00,The JavaScript and API powered WordPress.com
 zauberzeug/nicegui,11643,706,2021-05-07T13:55:05+00:00,2025-03-30T16:20:23+00:00,Create web-based user interfaces with Python. The nice way.
 triggerdotdev/trigger.dev,10567,671,2022-11-30T14:59:07+00:00,2025-03-30T16:00:55+00:00,Trigger.dev – open source background jobs and AI infrastructure
-triggerdotdev/trigger.dev,10566,671,2022-11-30T14:59:07+00:00,2025-03-30T08:33:24+00:00,Trigger.dev – open source background jobs and AI infrastructure
 instructor-ai/instructor,9933,763,2023-06-14T10:42:23+00:00,2025-03-30T13:04:30+00:00,structured outputs for llms
 langfuse/langfuse,9893,909,2023-05-18T17:47:09+00:00,2025-03-30T16:16:55+00:00,"🪢 Open source LLM engineering platform: LLM Observability, metrics, evals, prompt management, playground, datasets. Integrates with OpenTelemetry, Langchain, OpenAI SDK, LiteLLM, and more. 🍊YC W23 "
-langfuse/langfuse,9892,908,2023-05-18T17:47:09+00:00,2025-03-30T15:51:16+00:00,"🪢 Open source LLM engineering platform: LLM Observability, metrics, evals, prompt management, playground, datasets. Integrates with OpenTelemetry, Langchain, OpenAI SDK, LiteLLM, and more. 🍊YC W23 "
 keephq/keep,9804,912,2023-02-04T18:43:27+00:00,2025-03-30T15:46:45+00:00,The open-source AIOps and alert management platform
 woocommerce/woocommerce,9660,10769,2011-08-09T15:12:11+00:00,2025-03-30T10:59:21+00:00,"A customizable, open-source ecommerce platform built on WordPress. Build any commerce solution you can imagine."
 scalar/scalar,9578,324,2023-08-16T13:42:32+00:00,2025-03-30T16:34:55+00:00,Scalar is an open-source API platform:　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　🌐 Modern Rest API Client　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　📖 Beautiful API References　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　　✨ 1st-Class OpenAPI/Swagger Support
 highlight/highlight,8107,399,2020-08-20T17:55:23+00:00,2025-03-30T06:49:11+00:00,"highlight.io: The open source, full-stack monitoring platform. Error monitoring, session replay, logging, distributed tracing, and more."
 promptfoo/promptfoo,6015,497,2023-04-28T15:48:49+00:00,2025-03-30T18:15:40+00:00,"Test your prompts, agents, and RAGs. Red teaming, pentesting, and vulnerability scanning for LLMs. Compare performance of GPT, Claude, Gemini, Llama, and more. Simple declarative configs with command line and CI/CD integration."
-promptfoo/promptfoo,6014,497,2023-04-28T15:48:49+00:00,2025-03-30T15:32:48+00:00,"Test your prompts, agents, and RAGs. Red teaming, pentesting, and vulnerability scanning for LLMs. Compare performance of GPT, Claude, Gemini, Llama, and more. Simple declarative configs with command line and CI/CD integration."
 PrefectHQ/marvin,5586,359,2023-03-10T18:44:40+00:00,2025-03-29T02:25:10+00:00,✨ AI agents that spark joy
 epicweb-dev/epic-stack,5269,435,2023-05-04T21:45:08+00:00,2025-03-30T15:41:11+00:00,This is a Full Stack app starter with the foundational things setup and configured for you to hit the ground running on your next EPIC idea.
 lightdash/lightdash,4571,516,2021-03-19T09:44:40+00:00,2025-03-30T14:32:42+00:00,Self-serve BI to 10x your data team ⚡️
@@ -47,13 +32,9 @@ PySpur-Dev/pyspur,4114,273,2024-09-23T17:24:52+00:00,2025-03-30T15:47:40+00:00,A
 FunnyWolf/Viper,3878,537,2020-05-29T12:53:42+00:00,2025-03-30T17:01:28+00:00,A Unified Platform for Adversary Emulation and Red Team Operations
 nucleuscloud/neosync,3830,151,2023-08-24T21:41:12+00:00,2025-03-30T06:16:32+00:00,"Open Source Data Security Platform for Developers to Monitor and Detect PII, Anonymize Production Data and Sync it across environments. "
 elie222/inbox-zero,3741,414,2023-07-12T15:34:57+00:00,2025-03-30T17:10:15+00:00,Open source email app to reach inbox zero fast.
-elie222/inbox-zero,3740,414,2023-07-12T15:34:57+00:00,2025-03-30T16:20:55+00:00,Open source email app to reach inbox zero fast.
-elie222/inbox-zero,3740,414,2023-07-12T15:34:57+00:00,2025-03-30T15:58:09+00:00,Open source email app to reach inbox zero fast.
 wp-graphql/wp-graphql,3698,456,2016-10-31T16:06:18+00:00,2025-03-29T02:33:33+00:00,:rocket: GraphQL API for WordPress
 Helicone/helicone,3504,351,2023-01-31T22:34:44+00:00,2025-03-30T18:58:21+00:00,"🧊 Open source LLM observability platform. One line of code to monitor, evaluate, and experiment. YC W23 🍓"
-Helicone/helicone,3504,351,2023-01-31T22:34:44+00:00,2025-03-30T15:58:25+00:00,"🧊 Open source LLM observability platform. One line of code to monitor, evaluate, and experiment. YC W23 🍓"
 eastlondoner/cursor-tools,3455,168,2025-01-13T15:03:33+00:00,2025-03-30T18:19:00+00:00,Give Cursor Agent an AI Team and Advanced Skills
-eastlondoner/cursor-tools,3453,168,2025-01-13T15:03:33+00:00,2025-03-30T15:06:48+00:00,Give Cursor Agent an AI Team and Advanced Skills
 imbhargav5/rooks,3248,218,2018-11-08T16:14:39+00:00,2025-03-28T19:00:02+00:00, Essential React custom hooks ⚓ to super charge your components!
 cool-team-official/cool-admin-midway,2826,640,2021-02-27T15:05:54+00:00,2025-03-30T08:10:59+00:00,🔥 cool-admin(midway版)一个很酷的后台权限管理框架，Ai编码、流程编排、模块化、插件化、CRUD极速开发，永久开源免费，基于nodejs、typescript、typeorm、mysql、jwt、vue3、vite、element-ui等构建
 BoundaryML/baml,2783,110,2023-10-06T18:57:41+00:00,2025-03-30T16:46:45+00:00,The AI framework that adds the engineering to prompt engineering (Python/TS/Ruby/Java/C#/Rust/Go compatible)
@@ -62,19 +43,14 @@ undb-io/undb,2511,120,2022-11-18T03:22:51+00:00,2025-03-30T06:30:59+00:00,🚀 P
 JhumanJ/OpnForm,2503,351,2022-09-20T19:54:26+00:00,2025-03-30T17:14:47+00:00,Beautiful Open-Source Form Builder
 mayneyao/eidos,2472,99,2023-06-08T16:49:09+00:00,2025-03-30T15:43:44+00:00,An extensible framework for Personal Data Management.
 linshenkx/prompt-optimizer,2457,263,2025-02-12T06:06:49+00:00,2025-03-30T18:54:36+00:00,一款提示词优化器，助力于编写高质量的提示词
-linshenkx/prompt-optimizer,2454,263,2025-02-12T06:06:49+00:00,2025-03-30T17:31:57+00:00,一款提示词优化器，助力于编写高质量的提示词
-linshenkx/prompt-optimizer,2451,263,2025-02-12T06:06:49+00:00,2025-03-30T16:26:57+00:00,一款提示词优化器，助力于编写高质量的提示词
 blacktop/ipsw,2239,172,2018-08-25T03:05:41+00:00,2025-03-30T06:20:28+00:00,iOS/macOS Research Swiss Army Knife
 ballerine-io/ballerine,2157,210,2022-10-02T21:20:10+00:00,2025-03-27T23:27:49+00:00,Open-source infrastructure and data orchestration platform for risk decisioning
 cool-team-official/cool-admin-vue,2065,553,2021-02-27T16:48:33+00:00,2025-03-30T15:05:56+00:00,🔥 cool-admin一个很酷的后台权限管理框架，模块化、插件化、CRUD极速开发，永久开源免费，基于vue3、element-plus、pinia、vite、tailwindcss、i18n等构建
 deltazefiro/Amarok-Hider,2029,64,2022-01-31T06:46:16+00:00,2025-03-30T11:34:49+00:00,Hide your private files and apps with a single click.
 terryyin/lizard,1938,255,2012-06-21T11:31:46+00:00,2025-03-30T16:56:56+00:00,"A simple code complexity analyser without caring about the C/C++ header files or Java imports, supports most of the popular languages."
-terryyin/lizard,1937,255,2012-06-21T11:31:46+00:00,2025-03-28T12:52:36+00:00,"A simple code complexity analyser without caring about the C/C++ header files or Java imports, supports most of the popular languages."
 OneKeyHQ/app-monorepo,1880,382,2021-11-22T14:54:51+00:00,2025-03-30T14:02:58+00:00,"Secure, open source and community driven crypto wallet runs on all platforms and trusted by millions."
 flyerhq/flutter_chat_ui,1760,755,2020-08-30T18:20:18+00:00,2025-03-29T18:58:51+00:00,"Actively maintained, community-driven chat UI implementation with an optional Firebase BaaS."
 huggingface/nanotron,1739,168,2023-09-11T14:40:28+00:00,2025-03-30T17:12:00+00:00,Minimalistic large language model 3D-parallelism training
-huggingface/nanotron,1738,168,2023-09-11T14:40:28+00:00,2025-03-30T16:29:46+00:00,Minimalistic large language model 3D-parallelism training
-huggingface/nanotron,1737,168,2023-09-11T14:40:28+00:00,2025-03-30T07:48:26+00:00,Minimalistic large language model 3D-parallelism training
 Automattic/jetpack,1650,815,2013-12-16T16:43:01+00:00,2025-03-28T23:13:07+00:00,"Security, performance, marketing, and design tools — Jetpack is made by WordPress experts to make WP sites safer and faster, and help you grow your traffic."
 superglue-ai/superglue,1629,71,2025-01-10T18:38:47+00:00,2025-03-30T06:05:46+00:00,Self-healing open source data connector. Use it as a layer between you and any complex / legacy APIs and always get the data that you want in the format you expect.
 jpedroschmitz/typescript-nextjs-starter,1394,157,2020-03-19T18:26:38+00:00,2025-03-29T22:19:44+00:00,Non-opinionated TypeScript starter for Next.js 15. All the tools you need to build your next project ⚡️
@@ -82,7 +58,6 @@ mikker/LeaderKey.app,1360,42,2024-08-12T08:58:31+00:00,2025-03-30T07:51:27+00:00
 Comfy-Org/desktop,1329,85,2024-08-13T00:43:45+00:00,2025-03-30T05:23:32+00:00,The desktop app for ComfyUI (Windows & macOS)
 cloudflare/agents,1288,79,2025-01-29T23:14:04+00:00,2025-03-30T18:28:32+00:00,Build and deploy AI Agents on Cloudflare
 ThinkInAIXYZ/deepchat,1252,185,2025-02-14T01:56:51+00:00,2025-03-30T15:02:47+00:00,DeepChat - 连接强大AI与个人世界的智能助手 | DeepChat - A smart assistant that connects powerful AI to your personal world
-ThinkInAIXYZ/deepchat,1252,186,2025-02-14T01:56:51+00:00,2025-03-30T15:02:47+00:00,DeepChat - 连接强大AI与个人世界的智能助手 | DeepChat - A smart assistant that connects powerful AI to your personal world
 hashintel/hash,1162,88,2019-07-15T16:19:36+00:00,2025-03-30T09:44:19+00:00,"🚀  The open-source, multi-tenant, self-building knowledge graph"
 sakaiproject/sakai,1121,962,2014-12-29T11:14:17+00:00,2025-03-29T15:53:52+00:00,"Sakai is a freely available, feature-rich technology solution for learning, teaching, research and collaboration. Sakai is an open source software suite developed by a diverse and global adopter community."
 leaperone/MultiPost-Extension,1116,101,2024-11-12T03:35:15+00:00,2025-03-30T07:27:21+00:00,A browser extension that helps users publish content to multiple social media platforms with one click.
@@ -94,21 +69,14 @@ cloudposse/atmos,932,114,2020-09-03T00:46:14+00:00,2025-03-30T08:56:27+00:00,"�
 dotCMS/core,881,472,2012-03-15T15:24:14+00:00,2025-03-28T22:27:07+00:00,Headless/Hybrid Content Management System for Enterprises
 typefully/minimal-twitter,852,50,2019-07-18T01:28:43+00:00,2025-03-27T16:18:35+00:00,Minimal Theme for Twitter - Refine and Declutter Your Twitter Web Experience
 bmadcode/cursor-auto-rules-agile-workflow,833,121,2025-02-16T00:11:39+00:00,2025-03-30T18:27:16+00:00,
-bmadcode/cursor-auto-rules-agile-workflow,832,121,2025-02-16T00:11:39+00:00,2025-03-30T17:18:20+00:00,
-bmadcode/cursor-auto-rules-agile-workflow,831,121,2025-02-16T00:11:39+00:00,2025-03-30T16:46:25+00:00,
-bmadcode/cursor-auto-rules-agile-workflow,830,121,2025-02-16T00:11:39+00:00,2025-03-30T16:06:47+00:00,
-bmadcode/cursor-auto-rules-agile-workflow,829,121,2025-02-16T00:11:39+00:00,2025-03-30T15:40:30+00:00,
 sullyo/webapp-starter,784,144,2025-02-19T07:51:18+00:00,2025-03-29T22:35:06+00:00,A monorepo template for building webapps - perfect for LLMs
 tsukumijima/KonomiTV,725,54,2021-08-27T15:20:10+00:00,2025-03-30T04:57:05+00:00,"KonomiTV: Kept Organized, Notably Optimized, Modern Interface TV media server"
 alanhe421/alfred-workflows,686,65,2019-01-13T04:20:51+00:00,2025-03-30T13:54:03+00:00,"Save time, Improve life.🚀  ☕️ 💻"
 ai-hero-dev/ai-hero,679,66,2024-12-17T09:27:45+00:00,2025-03-30T18:02:34+00:00,AI Hero's open-source examples and course material. Learn AI Engineering with a single repo.
 pnd280/complexity,674,44,2024-05-03T13:51:50+00:00,2025-03-30T16:50:45+00:00,⚡  Supercharge your Perplexity.ai
-pnd280/complexity,673,44,2024-05-03T13:51:50+00:00,2025-03-30T16:26:23+00:00,⚡  Supercharge your Perplexity.ai
 daangn/seed-design,669,29,2021-03-11T12:52:42+00:00,2025-03-28T01:34:22+00:00,The Seed Design System
 darkroomengineering/satus,638,59,2021-10-06T19:54:34+00:00,2025-03-30T15:18:57+00:00,Advanced Next.js App Router starter for content-driven sites
 different-ai/note-companion,601,83,2023-09-10T20:33:20+00:00,2025-03-30T19:02:29+00:00,Note Companion: AI assistant for Obsidian that goes beyond just a chat. (prev File Organizer 2000)
-different-ai/note-companion,601,83,2023-09-10T20:33:20+00:00,2025-03-30T18:28:11+00:00,Note Companion: AI assistant for Obsidian that goes beyond just a chat. (prev File Organizer 2000)
-different-ai/note-companion,601,83,2023-09-10T20:33:20+00:00,2025-03-29T14:05:33+00:00,Note Companion: AI assistant for Obsidian that goes beyond just a chat. (prev File Organizer 2000)
 AudiusProject/audius-protocol,577,116,2019-08-11T22:31:43+00:00,2025-03-30T02:58:03+00:00,"The Audius Protocol - Freedom to share, monetize, and listen to any audio content."
 airweave-ai/airweave,564,71,2024-12-24T10:00:06+00:00,2025-03-30T08:35:35+00:00,Turn any app into agent knowledge
 kinopeee/cursorrules,559,24,2025-01-16T06:30:23+00:00,2025-03-30T09:36:57+00:00,
@@ -116,10 +84,6 @@ taishikato/supavec,559,45,2024-12-24T07:38:19+00:00,2025-03-29T02:38:45+00:00,"T
 rivet-gg/actor-core,528,17,2024-02-07T01:06:25+00:00,2025-03-30T05:35:24+00:00,"🎭 Stateful serverless framework for Rivet, Cloudflare Workers, Bun, and Node.js. Build AI agents, realtime apps, game servers, and more."
 level09/enferno,523,77,2014-07-09T12:57:38+00:00,2025-03-30T12:42:52+00:00,"This collection of modern libraries and tools, built on top of the Flask framework, allows you to quickly create any website or web-based application (SAAS) with impressive speed."
 eyaltoledano/claude-task-master,519,47,2025-03-04T18:54:54+00:00,2025-03-30T19:03:05+00:00,An AI-powered task-management system you can drop into Cursor.
-eyaltoledano/claude-task-master,517,47,2025-03-04T18:54:54+00:00,2025-03-30T18:39:16+00:00,An AI-powered task-management system you can drop into Cursor.
-eyaltoledano/claude-task-master,514,47,2025-03-04T18:54:54+00:00,2025-03-30T18:24:46+00:00,An AI-powered task-management system you can drop into Cursor.
-eyaltoledano/claude-task-master,506,47,2025-03-04T18:54:54+00:00,2025-03-30T17:10:30+00:00,An AI-powered task-management system you can drop into Cursor.
-eyaltoledano/claude-task-master,504,47,2025-03-04T18:54:54+00:00,2025-03-30T16:16:28+00:00,An AI-powered task-management system you can drop into Cursor.
 cloudflare/agents-starter,496,54,2025-02-21T00:58:55+00:00,2025-03-30T05:21:19+00:00,A starter kit for building ai agents on Cloudflare
 helixml/helix,476,48,2023-10-17T07:11:12+00:00,2025-03-30T04:03:21+00:00,"🧬 Helix is a private GenAI stack for building AI applications with declarative pipelines, knowledge (RAG), API bindings, and first-class testing."
 dotnetfactory/fluid-calendar,470,19,2025-02-17T12:34:57+00:00,2025-03-30T17:45:05+00:00,
@@ -130,16 +94,13 @@ tegnike/aituber-kit,435,90,2023-10-14T20:14:40+00:00,2025-03-30T15:01:40+00:00,A
 dxos/dxos,420,35,2021-04-07T08:13:23+00:00,2025-03-30T14:43:41+00:00,"TypeScript implementation of the DXOS protocols, SDK, toolchain and Composer."
 gensx-inc/gensx,408,17,2024-12-07T01:08:18+00:00,2025-03-30T13:09:24+00:00,The TypeScript framework for agents & workflows with react-like components. Lightning fast dev loop. Easy to learn. Easy to extend.
 daydreamsai/daydreams,388,90,2024-12-20T22:17:20+00:00,2025-03-30T17:25:18+00:00,Daydreams is a generative agent framework for executing anything onchain
-daydreamsai/daydreams,387,90,2024-12-20T22:17:20+00:00,2025-03-30T11:25:59+00:00,Daydreams is a generative agent framework for executing anything onchain
 cmackenzie1/torii-rs,380,11,2025-01-28T05:17:32+00:00,2025-03-30T00:53:39+00:00,Torii is a powerful authentication framework for Rust applications that gives you complete control over your users' data.
 panther-labs/panther-analysis,368,179,2019-10-17T18:47:09+00:00,2025-03-29T04:46:21+00:00,Built-in Panther detection rules and policies
 trycompai/comp,368,36,2025-01-15T20:43:05+00:00,2025-03-30T07:24:20+00:00,The open source compliance platform - Drata & Vanta Alternative
 GatoGraphQL/GatoGraphQL,367,42,2016-08-27T15:27:57+00:00,2025-03-29T09:04:41+00:00,Interact with all your data in WordPress using GraphQL
 PostHog/posthog-foss,345,66,2020-08-11T13:26:26+00:00,2025-03-30T18:09:15+00:00,"PostHog FOSS is a read-only mirror of PostHog, with all proprietary code removed. NOTE: This repo is synced automatically from the main PostHog repo. Please raise any issues and PRs there."
-PostHog/posthog-foss,344,66,2020-08-11T13:26:26+00:00,2025-03-30T01:56:23+00:00,"PostHog FOSS is a read-only mirror of PostHog, with all proprietary code removed. NOTE: This repo is synced automatically from the main PostHog repo. Please raise any issues and PRs there."
 GeekyWizKid/writing-helper,328,64,2025-03-03T05:26:55+00:00,2025-03-30T12:23:07+00:00,"A Next.js-based AI writing assistant supporting multiple LLM APIs (OpenAI, Claude, Gemini, etc.) with rich style customization features to help content creators improve quality and efficiency."
 CodeGuide-dev/codeguide-starter-lite,317,62,2025-01-29T06:05:48+00:00,2025-03-30T17:36:05+00:00,
-CodeGuide-dev/codeguide-starter-lite,315,62,2025-01-29T06:05:48+00:00,2025-03-30T15:16:04+00:00,
 bonny/WordPress-Simple-History,312,71,2013-04-15T11:39:08+00:00,2025-03-29T09:47:13+00:00,🔍🕵️‍♀️ WordPress audit log that track user changes in WordPress admin using a nice activity feed.
 loopwork-ai/iMCP,312,8,2025-03-05T13:14:00+00:00,2025-03-30T12:15:31+00:00,"A macOS app that provides an MCP server to your Messages, Contacts, and more"
 Anemll/Anemll,307,9,2025-01-06T01:15:08+00:00,2025-03-30T12:27:28+00:00,Artificial Neural Engine Machine Learning Library
@@ -163,10 +124,8 @@ kargnas/laravel-ai-translator,192,19,2024-06-30T06:47:18+00:00,2025-03-30T03:52:
 wdm0006/git-pandas,189,22,2015-10-27T21:55:06+00:00,2025-03-29T13:31:15+00:00,A wrapper around gitpython to produce pandas dataframes for analysis
 Apocrathia/home-assistant-config,182,34,2018-05-14T16:02:29+00:00,2025-03-28T18:25:59+00:00,Apocrathia's Home Assistant Configuration Files
 Bhartendu-Kumar/rules_template,177,24,2025-03-21T10:31:17+00:00,2025-03-30T17:50:18+00:00,"If using CLINE/RooCode/Cursor/Windsurf Setup these rules. Usable for newbies riding AI wave and experienced folks both . Combines: (1) Memory,(2) Reasoning into subtasks (3) Prompts for best practices."
-Bhartendu-Kumar/rules_template,176,24,2025-03-21T10:31:17+00:00,2025-03-30T07:50:46+00:00,"If using CLINE/RooCode/Cursor/Windsurf Setup these rules. Usable for newbies riding AI wave and experienced folks both . Combines: (1) Memory,(2) Reasoning into subtasks (3) Prompts for best practices."
 hooray/fantastic-startkit,171,38,2021-06-03T02:49:10+00:00,2025-03-26T07:30:02+00:00,一款简单好用的 Vue 项目启动套件，基于 Vue3 & Vite
 Mawla/cursor_rules,171,18,2025-01-19T16:38:12+00:00,2025-03-30T18:42:23+00:00,Behaviour for cursor
-Mawla/cursor_rules,170,18,2025-01-19T16:38:12+00:00,2025-03-29T20:24:17+00:00,Behaviour for cursor
 mangosqueezy/mangosqueezy,166,10,2024-04-18T01:00:34+00:00,2025-03-26T07:49:34+00:00,AI agent to find and manage affiliates for SaaS businesses 🤖
 wdm0006/pygeohash,159,25,2016-01-07T16:27:10+00:00,2025-03-30T15:34:38+00:00,Python module for interacting with geohashes
 sshtunnelvision/MCP-LOGO-GEN,159,12,2025-03-05T05:59:27+00:00,2025-03-20T20:35:49+00:00,
@@ -195,7 +154,6 @@ f3liiix/nav-site,104,18,2025-03-07T22:09:33+00:00,2025-03-30T15:19:51+00:00,一�
 helius-labs/helius-rust-sdk,93,43,2024-04-17T18:41:53+00:00,2025-03-29T05:48:48+00:00,Asynchronous Helius Rust SDK
 IamLiuLv/compoder,91,34,2024-12-03T09:38:34+00:00,2025-03-30T13:43:21+00:00,Compoder is an open-source AI-driven component code generation engine that integrates modern frontend tech stacks with various AI model capabilities. You can customize Compoder to create AI-powered component code generators based on specific technology stacks and specific scenarios.
 langfuse/langfuse-docs,90,86,2023-05-22T14:48:56+00:00,2025-03-30T18:05:09+00:00,"🪢 Langfuse documentation -- Langfuse is the open source LLM Engineering Platform. Observability, evals, prompt management, playground and metrics to debug and improve LLM apps"
-langfuse/langfuse-docs,90,86,2023-05-22T14:48:56+00:00,2025-03-30T12:06:44+00:00,"🪢 Langfuse documentation -- Langfuse is the open source LLM Engineering Platform. Observability, evals, prompt management, playground and metrics to debug and improve LLM apps"
 shopware/shopware-cli,89,36,2022-01-09T20:18:10+00:00,2025-03-24T12:21:14+00:00,CLI for Shopware Account and Shopware 6
 worldcoin/world-id-docs,89,51,2022-04-05T17:52:36+00:00,2025-03-27T13:58:49+00:00,Developer documentation for the Worldcoin SDK and World ID.
 Arie/serveme,88,13,2012-10-26T14:48:27+00:00,2025-03-30T12:16:11+00:00,serveme.tf
@@ -210,35 +168,24 @@ kaushikgopal/playground-android,79,5,2024-09-26T01:03:03+00:00,2025-03-29T19:50:
 yagami1997/TradeMind,78,32,2025-02-10T05:45:06+00:00,2025-03-27T15:16:58+00:00,This is a project for conducting technical analysis on U.S. stocks to identify market conditions and trading opportunities.
 stacksjs/ts-spreadsheets,76,0,2024-10-04T21:10:50+00:00,2025-02-27T16:59:24+00:00,📊 Easily manage & generate spreadsheets. CSV & Excel files supported.
 jlcases/paelladoc,75,13,2025-03-10T22:13:13+00:00,2025-03-30T19:25:25+00:00,Software developement system for Cursor AI
-jlcases/paelladoc,74,13,2025-03-10T22:13:13+00:00,2025-03-30T19:20:32+00:00,Software developement system for Cursor AI
-jlcases/paelladoc,73,12,2025-03-10T22:13:13+00:00,2025-03-30T19:08:38+00:00,Software developement system for Cursor AI
 petabridge/Incrementalist,73,5,2019-03-07T20:09:57+00:00,2025-03-12T21:41:21+00:00,Git-based incremental build and testing platform for .NET and .NET Core.
 vanzan01/cursor-memory-bank,71,27,2025-03-22T02:18:46+00:00,2025-03-30T19:16:58+00:00,A documentation-driven framework that gives Cursor a better persistent memory across sessions and chat sessions. Convert stateless AI models into reliable development partners that remember your project context.
-jlcases/paelladoc,71,12,2025-03-10T22:13:13+00:00,2025-03-30T18:46:57+00:00,Software developement system for Cursor AI
-jlcases/paelladoc,70,12,2025-03-10T22:13:13+00:00,2025-03-30T18:22:39+00:00,Software developement system for Cursor AI
-vanzan01/cursor-memory-bank,70,27,2025-03-22T02:18:46+00:00,2025-03-30T15:20:15+00:00,A documentation-driven framework that gives Cursor a better persistent memory across sessions and chat sessions. Convert stateless AI models into reliable development partners that remember your project context.
 elsbrock/hetzner-radar,70,0,2024-08-12T09:27:15+00:00,2025-03-21T22:39:02+00:00,🕵️ Track prices of the Hetzner dedicated server auction
 waqarkalim/holiday-optimizer,68,16,2025-02-19T08:34:41+00:00,2025-03-30T18:20:21+00:00,Vacation Day Optimizer Website
-jlcases/paelladoc,68,12,2025-03-10T22:13:13+00:00,2025-03-30T18:09:16+00:00,Software developement system for Cursor AI
 saleor/saleor-app-template,68,113,2022-04-26T17:34:55+00:00,2025-03-25T10:36:49+00:00,Your boilerplate for new Saleor Apps. Batteries included.
 kkrt-labs/keth,66,35,2024-07-05T08:23:24+00:00,2025-03-29T09:31:21+00:00,A EVM block proving backend in Cairo
 different-ai/hypr-v0,66,7,2024-11-05T16:31:53+00:00,2025-03-30T13:29:32+00:00,Your open-source bank account powered by AI Agents.
 dcramer/peated,66,15,2023-04-02T18:54:52+00:00,2025-03-27T03:31:50+00:00,
-jlcases/paelladoc,65,12,2025-03-10T22:13:13+00:00,2025-03-30T17:14:10+00:00,Software developement system for Cursor AI
 transloadit/node-sdk,63,26,2014-06-04T05:30:19+00:00,2025-03-24T16:10:18+00:00,Transloadit's official Node.js SDK
-jlcases/paelladoc,63,12,2025-03-10T22:13:13+00:00,2025-03-30T16:33:58+00:00,Software developement system for Cursor AI
-jlcases/paelladoc,62,12,2025-03-10T22:13:13+00:00,2025-03-30T16:05:27+00:00,Software developement system for Cursor AI
 siriwatknp/jun-mvp-starter,61,13,2025-03-12T15:17:26+00:00,2025-03-28T03:58:31+00:00,"A starter kit for MVP project with Next.js SSG, Line login, and Firebase."
 c15t/c15t,60,5,2025-01-13T12:41:52+00:00,2025-03-29T20:23:41+00:00,
 block/ftl,60,11,2023-02-28T05:17:05+00:00,2025-03-30T16:13:21+00:00,"FTL is a platform for building distributed systems that are safe to operate, easy to reason about, and fast to iterate and develop on."
-block/ftl,59,11,2023-02-28T05:17:05+00:00,2025-03-29T00:19:47+00:00,"FTL is a platform for building distributed systems that are safe to operate, easy to reason about, and fast to iterate and develop on."
 514-labs/moose,59,10,2023-07-20T00:23:21+00:00,2025-03-29T00:45:34+00:00,The developer framework for your data & analytics stack
 SlyyCooper/cursorrules-architect,58,8,2024-11-30T19:47:45+00:00,2025-03-29T18:01:20+00:00,AI-powered .cursorrules generator for Cursor IDE
 StackOneHQ/crossroads,58,1,2025-02-07T15:18:04+00:00,2025-03-26T02:10:39+00:00,ai agents doing agentic things on cloudflare durable objects
 thmsmlr/livebook_tools,58,3,2025-03-05T20:47:15+00:00,2025-03-29T09:55:04+00:00,"Powertools for livebook.dev — AI Code Editing, MCP Servers, and Running Livebooks from the CLI"
 one-ie/one,58,14,2024-11-12T12:59:19+00:00,2025-03-28T16:42:21+00:00,"Build AI powered websites with Astro, Shadcn and Vercel AI SDK"
 LegendApp/legend-photos,56,3,2025-03-21T16:43:22+00:00,2025-03-30T16:26:39+00:00,Legend Photos
-LegendApp/legend-photos,56,3,2025-03-21T16:43:22+00:00,2025-03-30T15:41:02+00:00,Legend Photos
 fatwang2/gitpush,53,3,2025-02-28T16:10:02+00:00,2025-03-21T06:38:02+00:00,an AI Github Rlease Tracker Powered by Cloudflare
 helius-labs/kite,53,1,2025-01-31T21:18:40+00:00,2025-03-24T17:36:45+00:00,The modern Solana framework for the browser and node.js
 geyserfund/geyser-app,52,18,2021-08-31T13:32:06+00:00,2025-03-27T21:07:23+00:00,Geyser is a bitcoin & nostr native crowdfunding platform where you can fund project ideas with the support from global communities.
@@ -248,7 +195,6 @@ FradSer/qa-generator,51,2,2025-02-20T02:52:11+00:00,2025-03-21T01:54:57+00:00,
 un/1up,51,0,2025-01-26T22:51:30+00:00,2025-03-29T23:22:34+00:00,Open Source Longevity System; Live Longer + Sharper + Better
 ham2k/app-polo,48,16,2023-12-05T12:56:07+00:00,2025-03-28T13:15:56+00:00,"The fastest, easiest, bestest way to log your amateur radio operations on the go."
 FreePeak/db-mcp-server,48,0,2025-03-17T20:40:28+00:00,2025-03-30T08:46:08+00:00,
-FreePeak/db-mcp-server,48,0,2025-03-17T20:40:28+00:00,2025-03-30T16:44:20+00:00,
 dotnet9/CodeWF,47,13,2024-01-04T01:29:04+00:00,2025-03-27T14:20:33+00:00,"码界工坊,codewf.com, dotnet9.com, dotnetools.com, dotnet.chat, qtzu.com"
 novuhq/docs,46,97,2023-08-01T11:17:03+00:00,2025-03-30T14:29:52+00:00,Novu documentation - The Masterpiece
 agentjido/jido_ai,46,2,2024-12-17T16:47:45+00:00,2025-03-30T09:13:59+00:00,Jido Actions and Skills for interacting with LLMs
@@ -287,7 +233,6 @@ AdirD/nestjs-context-logger,32,2,2024-12-01T09:59:58+00:00,2025-03-16T06:31:11+0
 XingQiPan/card-creation,31,9,2025-02-19T12:39:13+00:00,2025-03-30T13:47:19+00:00,
 ghuntley/ghuntley,31,3,2023-03-23T07:27:28+00:00,2025-03-30T05:33:13+00:00,@ghuntley's personal monorepo
 yeagerai/genlayer-studio,31,11,2024-03-16T11:09:12+00:00,2025-03-28T17:20:59+00:00,
-webdevcody/tanstack-course-platform,31,10,2025-02-03T14:42:14+00:00,2025-03-30T14:59:57+00:00,
 Lunaris-Project/HyprLuna,31,1,2025-03-22T06:06:19+00:00,2025-03-30T16:22:45+00:00,"Unleash the power of Hyprland with our modern, useful, user friendly, islamic halal Hyprland ecosystem dots"
 gouniverse/hb,30,1,2020-07-17T23:14:06+00:00,2025-03-22T19:19:44+00:00,HTML Builder
 bmadcode/aiadd-demo-cursor-0.3x-deprecated,30,7,2025-02-01T02:59:32+00:00,2025-03-29T13:49:39+00:00,
@@ -312,7 +257,6 @@ DataZooDE/flapi,27,3,2024-09-29T14:06:01+00:00,2025-03-22T15:25:45+00:00,API Fra
 tiptiz/editor,26,1,2024-11-18T08:16:08+00:00,2025-03-22T23:36:13+00:00,HTML5 & Email friendly WYSIWYG rich text editor by Tiptap & web comonents (WIP)
 dotabod/frontend,26,10,2022-11-09T23:14:58+00:00,2025-03-30T15:05:32+00:00,"Dashboard, OBS overlay, settings, homepage and more for Dotabod"
 darenmalfait/nerdfish.be,26,2,2022-01-23T11:09:33+00:00,2025-03-28T09:35:38+00:00,"Nerdfish, Freelance React/Typescript development website, built with NextJS, React and Tailwind"
-dotabod/frontend,26,10,2022-11-09T23:14:58+00:00,2025-03-30T16:41:45+00:00,"Dashboard, OBS overlay, settings, homepage and more for Dotabod"
 waynesutton/promptstack,26,7,2025-01-30T06:55:18+00:00,2025-03-26T05:59:58+00:00,"A searchable collection of AI prompts and code gen cursor rules, for bolt.new, loveable, windsurf, trae, to enhance your workflow for developers."
 slashequip/laravel-segment,25,15,2021-03-24T15:58:41+00:00,2025-02-20T21:05:17+00:00,"Laravel Segment is an opinionated, approach to integrating Segment into your Laravel application."
 ericyuegu/hal,25,2,2025-02-24T09:11:56+00:00,2025-03-27T19:54:32+00:00,Training AI for Super Smash Bros. Melee
@@ -365,7 +309,6 @@ sunny352/docker,17,4,2024-08-30T06:26:46+00:00,2025-03-07T03:57:59+00:00,
 stakefish/eth2-batch-deposit,17,13,2020-10-20T09:52:21+00:00,2025-03-26T08:46:21+00:00,Batch Deposit and Service Fee collection Smart Contract for ETH 2.0
 amarillonmc/phpdts,17,13,2015-05-30T19:28:30+00:00,2025-03-24T04:56:18+00:00,New repo for Yellow Version of phpbr
 GaloyMoney/lana-bank,17,5,2024-05-17T07:13:03+00:00,2025-03-30T14:59:58+00:00,Bitcoin-native Digital Asset-Backed Lending Platform
-GaloyMoney/lana-bank,17,5,2024-05-17T07:13:03+00:00,2025-03-30T16:40:43+00:00,Bitcoin-native Digital Asset-Backed Lending Platform
 EugenEistrach/et-stack,16,0,2024-09-28T19:28:43+00:00,2025-03-28T21:40:31+00:00,
 grafana/faro-flutter-sdk,16,3,2024-09-03T09:25:10+00:00,2025-03-29T12:03:03+00:00,"The Grafana Faro Flutter SDK, part of the Grafana Faro project, is a highly configurable flutter SDK for real user monitoring (RUM) that instruments flutter applications to capture observability signals. Flutter frontend telemetry can then be correlated with backend and infrastructure data for full-stack observability."
 coollabsio/coolify.io,16,15,2024-01-08T07:56:54+00:00,2025-03-28T19:43:20+00:00,Landing page of coolify.io
@@ -471,7 +414,6 @@ stacksjs/qrx,8,0,2025-01-02T01:29:22+00:00,2025-03-13T08:14:34+00:00,🔒 QR & B
 btahir/hacky-experiments,8,1,2025-03-12T18:51:33+00:00,2025-03-27T18:27:18+00:00,An open source playground for my experiments
 DXHeroes/mcp-devtools,8,1,2025-03-07T11:06:05+00:00,2025-03-25T09:30:11+00:00,MCP DevTools: A suite of Model Context Protocol servers enabling AI assistants to interact with developer tools and services
 inspatiallabs/inspatial-dev,8,1,2024-10-03T15:26:34+00:00,2025-03-29T04:07:31+00:00,"InSpatial Dev Core Pipeline, Infrastructure and APIs (Early Access)"
-vultisig/vultisig-windows,8,7,2024-07-22T04:24:19+00:00,2025-03-29T00:42:05+00:00,
 Prudent-Patterns/pyllments,8,0,2024-05-20T15:49:01+00:00,2025-03-26T05:28:17+00:00,Workbench focusing on building complex LLM workflows and their GUIs fully in Python.
 microsoft/spark.js,8,3,2025-01-23T05:34:36+00:00,2025-03-24T16:27:52+00:00,a suite of packages used to build on the Teams Platform.
 willibrandon/NetContextServer,8,2,2025-02-25T10:13:44+00:00,2025-03-30T16:20:27+00:00,A .NET implementation of the Model Context Protocol enabling AI assistants to explore and understand .NET codebases.
@@ -510,7 +452,6 @@ mikemaccana/kite,7,0,2025-01-30T15:48:39+00:00,2025-03-16T15:27:52+00:00,The mod
 byggstyrning/pyByggstyrning.extension,7,1,2025-03-14T10:26:56+00:00,2025-03-28T11:01:20+00:00,pyRevit extension
 gty3/market-by-order,7,2,2025-02-14T18:13:18+00:00,2025-03-05T08:51:32+00:00,
 coding-pelican/dasae-headers,7,0,2025-01-09T12:18:42+00:00,2025-03-30T15:07:53+00:00,dasae-headers: A modern extension language for safer and more productive C programming
-djaiss/peopleOS,7,0,2025-01-13T11:52:21+00:00,2025-03-30T18:22:26+00:00,Bullshit free personal CRM 🧑‍🤝‍🧑
 blencorp/rules-gen,6,0,2025-03-01T04:24:37+00:00,2025-03-22T19:07:28+00:00,CLI tool to generate cursor and windsurf rules
 dracidoupe/graveyard,6,5,2017-09-30T10:04:25+00:00,2025-03-01T21:15:53+00:00,Open Source reimplementation of https://www.dracidoupe.cz/
 constROD/template-expo,6,1,2024-04-02T20:02:39+00:00,2025-03-28T22:30:32+00:00,
@@ -529,7 +470,6 @@ lukeslp/alt-text-local-ai,6,3,2024-12-29T01:04:55+00:00,2025-03-17T22:15:20+00:0
 JustTryAI/databricks-mcp-server,6,1,2025-03-13T11:06:23+00:00,2025-03-28T12:53:55+00:00,A Model Completion Protocol (MCP) server for interacting with Databricks services
 bonny/brottsplatskartan-web,6,0,2016-12-27T10:02:58+00:00,2025-03-28T14:06:15+00:00,🚓 🗺 Webbplatsen brottsplatskartan.se visar senaste händelserna från Polisen utritat på karta.
 hellosatyajit/peerlist-profile,6,0,2025-02-21T17:56:20+00:00,2025-03-07T04:25:42+00:00,Use Peerlist account as CMS to build your site with custom UI
-Cris-0k/mcp-server-python-template,6,1,2025-03-24T02:21:05+00:00,2025-03-30T17:28:26+00:00,This template provides a streamlined foundation for building Model Context Protocol (MCP) servers in Python. It's designed to make AI-assisted development of MCP tools easier and more efficient.
 terryso/mcp-pinterest,6,2,2025-03-01T16:43:03+00:00,2025-03-28T03:58:02+00:00,
 creacher-creolio/mandarinTamer,6,1,2025-01-24T13:26:34+00:00,2025-03-19T08:13:46+00:00,"MandarinTamer is a Python library for converting Mandarin text between Simplified Chinese and Taiwanese-variant Traditional Chinese. It works without input script labels, handles mixed-script text, modernizes rare terms, and uses AI to resolve one-to-many mappings. Backed by expert-curated dictionaries, it’s precise and easy to use."
 cairo-book/starknet-agent,6,1,2024-08-27T11:27:01+00:00,2025-03-23T15:23:10+00:00,The Starknet Agent front-end
@@ -547,7 +487,6 @@ radzionc/resume,5,2,2024-12-02T03:38:59+00:00,2025-03-28T08:24:59+00:00,Open-sou
 LastKnightCoder/editor,5,0,2023-04-28T10:57:02+00:00,2025-03-30T14:35:44+00:00,Markdown 编辑器，尝试实现可见即可得
 dmccreary/clocks-and-watches,5,1,2023-02-28T02:31:01+00:00,2025-03-12T03:00:51+00:00,Demo code for the Waveshare RP2040 watch display
 mamisoa/oph4py,5,1,2021-02-13T21:57:00+00:00,2025-03-30T17:58:48+00:00,py4web myapp test
-mamisoa/oph4py,5,1,2021-02-13T21:57:00+00:00,2025-03-30T11:19:14+00:00,py4web myapp test
 jabrena/java-cursor-rules,5,2,2025-02-08T23:14:36+00:00,2025-03-28T23:10:21+00:00,A collection of Cursor rules for Java space
 Meeting-Baas/meeting-mcp,5,0,2025-03-07T22:42:13+00:00,2025-03-30T13:24:20+00:00,"Model Context Protocol server for AI assistants to create meeting bots, search transcripts, and manage meeting recordings."
 jay6697117/we-drawing-nuxt,5,0,2025-02-13T11:14:50+00:00,2025-03-17T06:49:28+00:00,"AI drawing picture, just for fun"
@@ -631,7 +570,6 @@ m4n3z40/sbc-cursor-starter-kit,3,0,2025-02-23T00:34:19+00:00,2025-03-04T22:56:45
 babakzy/nuxtz,3,0,2024-04-15T12:50:54+00:00,2025-03-28T16:05:27+00:00,Nuxtz | Nuxt 3 Boilerplate
 beverm2391/chain-of-thought-mcp-server,3,2,2025-03-22T04:22:05+00:00,2025-03-27T04:39:15+00:00,An mcp server to inject raw chain of thought tokens from a reasoning model.
 yiqun12/eatifyPos,3,4,2023-01-10T06:40:25+00:00,2025-03-30T08:31:40+00:00,
-bmadcode/starter-web-app,3,1,2025-02-26T03:36:26+00:00,2025-03-28T12:08:33+00:00,"Starter Web App with NextJS, Subabase Auth and Storage, Login and Landing app page starter"
 waynesutton/todohosted,3,0,2025-02-11T23:14:13+00:00,2025-03-12T16:59:47+00:00,"An open source chat and reminder application built with Convex, Clerk, and React. This application features real-time chat, task management, and an administrative dashboard for moderation."
 Vizioz/Teamwork-MCP,3,0,2025-03-06T18:07:13+00:00,2025-03-28T15:39:19+00:00,MCP server to connect to the Teamwork API
 thomasballinger/convex-sse-mcp,3,1,2025-02-15T09:14:16+00:00,2025-03-14T05:26:41+00:00,
@@ -653,7 +591,6 @@ Idea-Pulse/Dapp-Near,3,1,2025-03-03T02:43:44+00:00,2025-03-12T17:15:57+00:00,"Cr
 get-convex/mastra-demo,3,0,2025-03-14T08:25:08+00:00,2025-03-21T16:48:38+00:00,Work In Progres! Getting mastra to run on convex
 LEE-CHENYU/leviathan,3,2,2022-01-20T00:00:23+00:00,2025-03-22T01:27:29+00:00,Exploring the Emergence of Complex Systems through Individual Decisions and Relationships
 cktang88/mydevenv,3,0,2018-11-19T21:47:40+00:00,2025-03-13T03:42:28+00:00,"My dev env, and some helpful stuff"
-FreePeak/cortex,3,0,2025-03-29T18:05:43+00:00,2025-03-30T16:29:31+00:00,Build MCP Servers Declaratively in Golang
 terryso/git_auto_commit,3,1,2025-02-03T19:33:46+00:00,2025-02-05T22:53:58+00:00,
 pfefferle/wordpress-crossbooster,3,0,2024-07-10T05:30:56+00:00,2025-03-27T19:27:49+00:00,An experimental plugin that Cross-Boosts ActivityPub enabled Posts on Mastodon
 jermspeaks/jermspeaks.github.io,3,0,2015-04-15T00:09:49+00:00,2025-03-25T16:18:48+00:00,Personal Website
@@ -669,7 +606,6 @@ FinOMOP/ROMOPMappingTools,3,0,2023-04-27T10:45:55+00:00,2025-03-10T12:17:27+00:0
 City-of-Turku/palvelupolut,3,0,2022-02-03T08:55:13+00:00,2025-02-26T07:09:52+00:00,Palvelupolut + Storybook
 djalmaaraujo/lg,3,1,2025-03-13T11:59:20+00:00,2025-03-21T13:49:11+00:00,CLI to store logs of your life/work using the terminal storing locally or syncing with a GitHub gist
 settlemint/docs,3,0,2024-02-28T10:04:34+00:00,2025-03-30T17:11:43+00:00,Get going with SettleMint in minutes.
-luminus-xd/Astro-Blog,3,0,2023-11-27T08:41:21+00:00,2025-03-30T13:45:13+00:00,[WIP] Luminusの新ブログ
 dpaluy/rails-ai-rules,3,0,2025-03-29T05:53:47+00:00,2025-03-30T02:49:43+00:00,
 ferdelamad/cursor-task-fullstack-blog-nextjs-supabase,3,4,2025-03-12T16:43:37+00:00,2025-03-18T17:09:22+00:00,Cursor Task for a Fullstack Blog Using NextJS and Supabase
 stacksjs/audiox,3,0,2025-01-26T19:03:00+00:00,2025-03-22T03:53:11+00:00,🎵 Powerful audio processing for your media workflows.
@@ -692,8 +628,6 @@ fossas/circe,3,1,2024-12-02T20:12:11+00:00,2025-03-19T01:38:19+00:00,"Read, extr
 Hiviexd/tournament-tracker,3,2,2024-05-01T20:10:30+00:00,2025-03-30T14:58:15+00:00,The one-stop shop for all official osu! tournament correspondence and information!
 HaxballGym/Ursinaxball,3,2,2022-07-09T08:31:51+00:00,2025-02-09T13:34:52+00:00,
 instructa/codetie,3,0,2025-03-15T17:39:50+00:00,2025-03-19T12:27:06+00:00,A Starter-Kit for apps with Cursor and agile workflow management
-settlemint/docs,3,0,2024-02-28T10:04:34+00:00,2025-03-30T12:58:03+00:00,Get going with SettleMint in minutes.
-idvorkin/Settings,3,0,2014-11-21T22:23:29+00:00,2025-03-30T15:17:09+00:00,A Place to store my settings/dotFiles/etc
 nash-app/nash-tools,3,0,2025-02-13T18:54:43+00:00,2025-02-14T20:13:55+00:00,
 yagami1997/RealCarrier,3,0,2025-03-03T10:17:36+00:00,2025-03-12T11:01:24+00:00,Instant US mobile number verification with live LNP data synchronization
 PunGrumpy/blackhead,2,0,2025-03-08T16:47:47+00:00,2025-03-27T06:34:38+00:00,🎩 Turborepo template for Next.js apps
@@ -771,7 +705,6 @@ walteh/retab,2,0,2023-06-11T12:40:41+00:00,2025-02-24T19:03:33+00:00,"custom for
 Krumil/WayfinderStaking,2,0,2024-06-11T15:58:55+00:00,2025-03-12T10:30:39+00:00,Wayfinder Dashboard
 felipepimentel/prompts,2,0,2024-10-05T13:09:58+00:00,2025-03-11T09:53:49+00:00,Curated collection of optimized AI prompts to improve and customize interactions across various use cases and applications.
 jshim0978/interviews,2,0,2022-08-30T01:30:33+00:00,2025-03-19T16:24:25+00:00,for a job
-xsynaptic/spectralcodex,2,1,2024-12-12T13:27:36+00:00,2025-03-30T17:17:43+00:00,"Astro project for Spectral Codex, a geospatial journal and photography portfolio"
 kc3hack/2025_5,2,0,2025-02-04T15:46:49+00:00,2025-02-17T03:36:59+00:00,
 DCC-BS/rag-application,2,0,2024-09-09T09:39:12+00:00,2025-03-28T14:43:15+00:00,
 nkjain92/oneplace,2,0,2025-03-03T12:08:02+00:00,2025-03-28T07:19:16+00:00,
@@ -1054,7 +987,6 @@ BazingaOrg/ai-tool-use,1,0,2025-02-28T16:27:57+00:00,2025-03-29T12:29:04+00:00,�
 ludwig-g-w/Chaincred,1,2,2023-12-22T18:11:43+00:00,2025-03-12T14:42:06+00:00,Review & Loyality Mobile App using Blockchain EAS(Ethereum Attestation Service) as source of truth
 ThaddeusJiang/sensor_logs,1,0,2025-03-04T05:42:34+00:00,2025-03-06T08:37:17+00:00,
 GitStatus25/GitStatus,1,0,2025-03-18T20:14:14+00:00,2025-03-22T19:36:25+00:00,
-Siekwiee/AlchemicalCombination,1,0,2025-03-22T21:09:33+00:00,2025-03-30T16:43:17+00:00,Lua based idle Game
 ottodevs/ethdenver-wallet,1,0,2025-03-01T05:54:03+00:00,2025-03-28T23:12:17+00:00,hackathon project
 Auglon/v.2,1,0,2025-01-21T05:03:08+00:00,2025-03-27T07:31:59+00:00,
 evansims/writing,1,0,2025-03-07T16:30:23+00:00,2025-03-29T07:33:56+00:00,"A personal writing collection exploring creativity, engineering, focus, mindset, strategy, and tools."
@@ -1156,7 +1088,6 @@ jonathanphilippou/cursing-rulez,1,0,2025-03-10T22:56:48+00:00,2025-03-12T23:15:0
 acoreyj/tabletop-companion-next,1,0,2025-03-03T17:39:52+00:00,2025-03-04T03:53:22+00:00,Use AI to clear up rules for a game you are playing.
 alesanchezr/vibe-earth,1,0,2025-03-07T02:11:20+00:00,2025-03-10T22:02:04+00:00,Have a great time traveling thru earth
 heyjaywilson/jaywilsonzip,1,0,2025-02-03T15:24:15+00:00,2025-03-20T13:52:39+00:00,New website using 11ty
-robert-wettstaedt/grnyte,1,0,2024-03-24T08:05:19+00:00,2025-03-30T16:22:07+00:00,Secure boulder topo and session tracker built with SvelteKit
 swush-labs/swush-app,1,0,2024-10-22T01:28:16+00:00,2025-03-27T22:48:12+00:00,
 stacksjs/vite-plugin-layouts,1,0,2025-03-17T17:35:47+00:00,2025-03-17T21:39:23+00:00,🧩 Router-based layouts for your application.
 iamkissg/md2img,1,0,2025-02-08T16:06:19+00:00,2025-03-21T15:41:27+00:00,
@@ -1176,7 +1107,6 @@ taketo45/hacksonic-mylittlefancam,1,0,2025-03-01T07:26:53+00:00,2025-03-24T07:47
 chevyphillip/python-ops-starter,1,0,2025-03-01T08:09:13+00:00,2025-03-10T18:29:33+00:00,
 bork-research-institute/bork-tools,1,1,2025-03-13T03:42:58+00:00,2025-03-26T17:02:26+00:00,
 wesleycoder/guima.dev,1,0,2025-03-26T16:50:52+00:00,2025-03-29T17:02:15+00:00,Monorepo for my projects
-bluelight-hub/app,1,0,2025-02-13T23:05:40+00:00,2025-03-30T16:21:54+00:00,Architektur-Doku: https://architecture-docs.bluelight-hub.rubeen.dev/ Backend-Doku: https://backend-docs.bluelight-hub.rubeen.dev/
 Broccode/acci,1,1,2025-02-08T17:21:18+00:00,2025-02-20T17:55:10+00:00,
 82deutschmark/Spy-Story1,1,0,2025-03-10T06:23:02+00:00,2025-03-23T00:55:19+00:00,A simple choose your own adventure powered by ChatGPT
 agentuity/sdk-py,1,0,2025-03-02T16:07:18+00:00,2025-03-29T01:58:03+00:00,Python SDK for Agentuity
@@ -1619,7 +1549,6 @@ nicarap/somatho,0,0,2023-04-06T16:24:56+00:00,2025-03-24T05:01:09+00:00,
 Raalzz/gen-ui-example,0,1,2025-02-26T10:51:34+00:00,2025-02-26T10:53:37+00:00,
 michaeltuszynski/ml-ai-professional-cert,0,0,2025-01-16T19:09:52+00:00,2025-03-09T15:24:21+00:00,
 luismartinezs/byte-ui,0,0,2025-02-04T06:10:31+00:00,2025-02-04T06:10:37+00:00,
-mightymoose/fortymm,0,0,2025-01-19T13:19:22+00:00,2025-03-30T19:24:31+00:00,
 gavinongzk/namo_amituofo,0,0,2024-08-25T14:52:41+00:00,2025-03-30T12:52:37+00:00,Amituofo Registration
 lang-assist/server,0,0,2025-01-01T06:38:35+00:00,2025-03-26T23:59:30+00:00,Lang Assist Server
 Knoa0405/naeng-teol,0,0,2024-08-11T07:28:39+00:00,2025-03-30T13:33:23+00:00,자취생을 위한 냉장고 털기 AI 레시피
@@ -1696,7 +1625,6 @@ ncc-toda/class_doc,0,0,2025-03-12T07:15:52+00:00,2025-03-13T07:13:11+00:00,
 markorenic/CommanderChrisNext,0,0,2025-03-21T01:34:51+00:00,2025-03-21T02:09:04+00:00,
 Matt7500/reddit-clipper-v2,0,0,2025-03-08T23:16:50+00:00,2025-03-29T18:51:25+00:00,
 eipp/mindburn-aletheia,0,0,2025-03-15T17:56:37+00:00,2025-03-19T09:07:14+00:00,Human-in-the-loop AI verification platform built on Telegram and TON blockchain
-darekrossman/next-chrome-ext,0,0,2025-03-30T17:08:06+00:00,2025-03-30T19:11:45+00:00,
 rheeger/touch-grass,0,1,2025-01-29T05:52:17+00:00,2025-03-10T03:47:13+00:00,join the club sickos
 Camrule/blinkpay-webflow-components,0,0,2025-03-26T03:30:31+00:00,2025-03-26T22:58:47+00:00,test
 BenPfeffer-bot/warburg-newsletters,0,0,2025-03-03T16:54:05+00:00,2025-03-03T18:15:05+00:00,
@@ -1889,7 +1817,6 @@ ethical-shukatsu-dev/Project-X,0,1,2025-03-06T01:32:33+00:00,2025-03-27T07:18:10
 MartinSchlott/BetterMCPFileServer,0,0,2025-03-14T20:38:05+00:00,2025-03-14T20:46:45+00:00,
 devneill/dinnernotonyourown-26,0,0,2025-03-13T10:35:27+00:00,2025-03-13T11:24:49+00:00,
 kluless13/toolz,0,0,2025-02-23T10:50:54+00:00,2025-02-28T17:15:05+00:00,
-Hortashaorg/auro,0,0,2024-11-04T06:16:58+00:00,2025-03-30T18:07:40+00:00,
 martijnbokma/couch-docs,0,0,2025-03-11T14:30:50+00:00,2025-03-30T11:03:27+00:00,"This repository contains the official documentation for CouchCMS, a user-friendly and flexible Content Management System."
 GQ-Y/N-MeekYolo,0,0,2024-12-11T15:54:16+00:00,2025-03-28T12:34:05+00:00,
 jaortiz16/Payment_Gateway_Transacciones,0,0,2025-02-21T03:56:55+00:00,2025-03-05T04:30:50+00:00,Transaccion simple
@@ -2258,7 +2185,6 @@ francisbrero/iclood,0,0,2025-02-14T06:21:34+00:00,2025-03-26T00:15:26+00:00,iclo
 ShawaizSarfraz117/MCW-Practice-Management-Software,0,1,2025-03-12T12:54:50+00:00,2025-03-29T00:48:26+00:00,
 inkless/orz-cli,0,0,2025-03-22T07:56:33+00:00,2025-03-23T01:49:51+00:00,A command-line interface (CLI) tool for streamlining development workflows.
 ImSingee/new-spa-template,0,0,2025-03-03T10:34:02+00:00,2025-03-03T10:58:21+00:00,
-jesse-spevack/gradebot,0,0,2025-02-22T22:51:55+00:00,2025-03-30T15:26:20+00:00,Automated Assignment Grading System for Teachers
 Djoe-Denne/Palantir,0,0,2025-02-18T09:49:31+00:00,2025-03-27T12:19:21+00:00,
 fzf-labs/fdatabase,0,0,2024-02-02T15:40:31+00:00,2025-02-06T09:28:46+00:00,
 skamensky/pgmeta,0,0,2025-03-01T22:47:20+00:00,2025-03-06T13:20:58+00:00,
@@ -2371,7 +2297,6 @@ Soushi888/alternef-digital-garden,0,0,2025-02-12T05:07:30+00:00,2025-03-25T10:28
 botoxparty/chopshop,0,0,2025-02-28T16:45:03+00:00,2025-03-14T06:31:07+00:00,A workstation for chopped & screwed music. Create your own chopped & screwed edits
 Mizik-XR/frenchat,0,0,2025-02-21T15:37:53+00:00,2025-03-29T00:04:39+00:00,
 yukaorange/tangents-bitangents-materials__akella,0,0,2024-07-10T11:31:18+00:00,2024-07-10T11:39:17+00:00,
-kristofferaas/cucumber,0,0,2025-03-30T15:46:18+00:00,2025-03-30T15:46:36+00:00,🥒
 AtlasCargo/PlanetaryHUD,0,0,2025-01-27T11:38:51+00:00,2025-03-11T10:42:07+00:00,Interactive 3D planetary interface with React and Three.js
 tristanpendergrass/drg-mc,0,0,2024-10-16T21:00:03+00:00,2025-03-30T02:17:24+00:00,
 xmtp/xmtp-qa-testing,0,0,2025-02-07T21:06:01+00:00,2025-03-30T14:17:56+00:00,This monorepo contains multiple tools for testing and monitoring
@@ -2511,7 +2436,6 @@ TarekGohar/trip-viewer,0,0,2025-03-29T17:28:14+00:00,2025-03-29T22:31:28+00:00,
 joecoker/law-proposal,0,0,2025-03-02T20:13:37+00:00,2025-03-02T20:13:42+00:00,
 wataruY/inference-proxy,0,0,2025-03-28T00:23:04+00:00,2025-03-28T10:04:57+00:00,
 alexajuno/tic-tac-toe,0,0,2025-02-20T10:42:07+00:00,2025-02-20T10:42:15+00:00,
-Hortashaorg/auro,0,0,2024-11-04T06:16:58+00:00,2025-03-25T06:49:31+00:00,
 bladnman/youtube_channeler,0,0,2025-02-01T23:03:03+00:00,2025-02-14T00:22:48+00:00,
 alexyoung23j/indiearchive,0,0,2024-04-04T01:12:11+00:00,2025-03-02T20:50:31+00:00,
 theo886/PaperCut,0,0,2025-02-25T21:36:48+00:00,2025-03-06T18:50:47+00:00,
@@ -2887,7 +2811,6 @@ mpalatsi/PetMate,0,0,2025-02-27T03:31:06+00:00,2025-03-19T04:34:12+00:00,A web a
 qirh/sala_v3,0,0,2024-12-20T22:59:09+00:00,2025-02-22T04:54:19+00:00,
 onlydustxyz/drm-app,0,0,2025-03-11T08:16:32+00:00,2025-03-18T10:27:24+00:00,
 kvn3toj/DIOS,0,0,2025-02-22T10:23:21+00:00,2025-02-24T10:33:07+00:00,
-Hortashaorg/auro,0,0,2024-11-04T06:16:58+00:00,2025-03-30T17:25:11+00:00,
 KorszunKarol/guess-the-elo,0,0,2024-10-06T03:21:32+00:00,2025-03-15T00:18:54+00:00,
 yamatoya/sb1-bnykmy,0,0,2024-10-19T16:40:02+00:00,2025-03-22T16:36:18+00:00,Created with StackBlitz ⚡️
 codekiln/codekiln,0,0,2025-02-22T13:44:06+00:00,2025-03-19T11:33:22+00:00,About page for codekiln
@@ -3044,7 +2967,6 @@ thomas-lebeau/100-cims,0,0,2023-07-18T08:47:25+00:00,2025-03-25T01:01:50+00:00,"
 InfernapeXavier/InfernapeXavier.github.io,0,0,2018-01-24T14:18:32+00:00,2025-02-24T05:31:37+00:00,A little bit about me
 yonkolevel/react-native-circuit-ui,0,0,2025-03-14T18:17:30+00:00,2025-03-15T15:36:05+00:00,
 hfrdmnk/sitemate,0,0,2025-03-23T18:35:10+00:00,2025-03-23T19:24:47+00:00,Your assistant for creating high quality websites.
-diffen77/lokalaproducenter,0,0,2025-03-13T08:51:52+00:00,2025-03-30T15:40:02+00:00,
 benoit-lavigne/ExempleCursor,0,0,2025-03-12T07:34:09+00:00,2025-03-12T08:07:38+00:00,
 kolin-nielson/Brayden_tamagotchi,0,0,2025-03-19T05:26:03+00:00,2025-03-23T02:48:39+00:00,
 mkshadyf/mahanaim,0,0,2024-12-14T16:12:54+00:00,2025-03-07T06:23:35+00:00,
@@ -3138,7 +3060,6 @@ kayac-chang/ai-experiment,0,0,2025-03-30T15:03:22+00:00,2025-03-30T15:15:52+00:0
 andr-ec/random-elixir-rules,0,0,2025-03-19T17:41:22+00:00,2025-03-19T17:41:42+00:00,
 synkia/catalogo,0,0,2025-03-05T00:07:27+00:00,2025-03-06T20:49:58+00:00,
 vimona3ds/diverge-3,0,0,2025-02-26T13:15:14+00:00,2025-02-27T03:14:05+00:00,
-alger116/test,0,0,2025-02-05T06:45:23+00:00,2025-03-30T11:49:49+00:00,
 Jnanashish/ip-admin,0,0,2022-07-10T16:09:03+00:00,2025-03-23T16:15:06+00:00,
 MadeByNando/invest-vs,0,0,2025-03-19T21:37:17+00:00,2025-03-23T14:40:25+00:00,
 TheCowboyAI/cursorrules,0,0,2025-03-24T22:03:44+00:00,2025-03-26T19:53:34+00:00,Cowboy AI Cursor Rules
@@ -3204,7 +3125,6 @@ rohan-0202/finance_analysis,0,0,2025-03-05T12:51:07+00:00,2025-03-30T12:22:09+00
 trueshizus/bun_boton-ar,0,0,2025-02-14T16:39:23+00:00,2025-02-20T15:28:09+00:00,
 Niell007/ad-hosting-webside,0,1,2025-03-08T23:05:12+00:00,2025-03-18T22:04:16+00:00,
 arjav0703/orthopati-ent,0,0,2025-03-10T08:19:58+00:00,2025-03-29T15:22:48+00:00,
-jesse-spevack/gradebot,0,0,2025-02-22T22:51:55+00:00,2025-03-30T16:38:51+00:00,Automated Assignment Grading System for Teachers
 peter-sharp/timesheet,0,0,2022-11-28T07:12:52+00:00,2025-03-28T06:14:59+00:00,A simple time tracking app
 ryan-w-s/commentbox,0,0,2025-03-25T08:52:47+00:00,2025-03-27T09:32:27+00:00,Commenting and Reply service in sveltekit
 runnedrun/person-site-new,0,0,2025-01-21T09:33:14+00:00,2025-03-23T11:38:26+00:00,
@@ -3257,7 +3177,6 @@ ReMarket-SE2/webapp,0,0,2025-02-27T09:20:19+00:00,2025-03-29T10:57:11+00:00,The 
 chanpod/thegreatcommission,0,0,2023-02-13T03:22:29+00:00,2025-03-17T02:17:45+00:00,
 srsgores/storyplanner,0,0,2020-11-17T07:20:39+00:00,2025-03-26T09:06:08+00:00,Story and character plotting app
 region23/simple-blog-engine,0,0,2025-03-23T21:22:28+00:00,2025-03-24T15:59:13+00:00,Simple Blog Engine
-AliOlkac/AliOlkac_Portfolio,0,0,2025-03-24T10:35:54+00:00,2025-03-29T15:23:33+00:00,
 region23/videonova2,0,0,2025-03-28T20:40:51+00:00,2025-03-29T20:29:59+00:00,
 chengan/ai-assistant,0,0,2024-12-04T04:27:01+00:00,2024-12-04T06:39:17+00:00,
 piereau/etale-ta-connaissance,0,0,2025-03-28T10:33:38+00:00,2025-03-29T13:57:53+00:00,"Etale ta connaissance est une application web qui permet de stocker et de partager vos connaissances, vos ressources educatives."
