@@ -7,7 +7,7 @@ search API. It implements an adaptive partitioning strategy to overcome GitHub's
 search result limit of 1000 items by:
 
 1. First checking the total count of results for the search query
-2. If results exceed 1000, automatically partitioning the search by file size
+2. If results exceed 500, automatically partitioning the search by file size
 3. Using a binary-search-like approach to efficiently split the size ranges
 4. Combining results from all partitions into a single dataset
 
@@ -432,13 +432,62 @@ def search_with_efficient_partitioning(base_query, token=None, timestamp=None):
         return pd.DataFrame()
 
 
-def process_results_to_data_csvs(input_file=None, timestamp=None):
+@handle_rate_limit
+def get_repository_metrics(repo):
+    """
+    Get additional metrics for a GitHub repository.
+
+    Args:
+        repo: GitHub repository object
+
+    Returns:
+        dict: Dictionary containing repository metrics (issues, pulls, commits, contributors)
+    """
+    metrics = {
+        "repo_issues": None,
+        "repo_pulls": None,
+        "repo_commits": None,
+        "repo_contributors": None,
+    }
+
+    # Fetch issues count
+    try:
+        metrics["repo_issues"] = repo.get_issues(state="all").totalCount
+    except Exception as e:
+        logging.warning(f"Error getting issues count for {repo.full_name}: {str(e)}")
+
+    # Fetch pull requests count
+    try:
+        metrics["repo_pulls"] = repo.get_pulls(state="all").totalCount
+    except Exception as e:
+        logging.warning(f"Error getting pulls count for {repo.full_name}: {str(e)}")
+
+    # Fetch commit count
+    try:
+        metrics["repo_commits"] = repo.get_commits().totalCount
+    except Exception as e:
+        logging.warning(f"Error getting commit count for {repo.full_name}: {str(e)}")
+
+    # Fetch contributors count
+    try:
+        metrics["repo_contributors"] = repo.get_contributors().totalCount
+    except Exception as e:
+        logging.warning(
+            f"Error getting contributors count for {repo.full_name}: {str(e)}"
+        )
+
+    return metrics
+
+
+def process_results_to_data_csvs(input_file=None, timestamp=None, token=None):
     """
     Process the combined results from temp directory into repository and file CSVs in data directory.
+    Collects additional repository metrics such as issues, PRs, commits, and contributors count.
 
     Args:
         input_file (str, optional): Path to the input CSV file. If None, uses the latest combined file.
         timestamp (str, optional): Timestamp to use for output filenames. If None, uses current date.
+        token (str, optional): GitHub personal access token. If None, uses token from .env file.
 
     Returns:
         tuple: (repos_df, files_df) DataFrames containing the processed data
@@ -480,19 +529,79 @@ def process_results_to_data_csvs(input_file=None, timestamp=None):
 
     # Create a repositories DataFrame
     # Group by repository to get unique repositories
-    repos_df = df[
-        [
-            "repo_name",
-            "repo_stars",
-            "repo_forks",
-            "repo_created",
-            "repo_updated",
-            "repo_description",
-        ]
-    ].drop_duplicates(subset=["repo_name"])
+    repos_columns = [
+        "repo_name",
+        "repo_stars",
+        "repo_forks",
+        "repo_created",
+        "repo_updated",
+        "repo_description",
+    ]
+
+    # Filter out columns that don't exist in the input file
+    existing_columns = [col for col in repos_columns if col in df.columns]
+    repos_df = df[existing_columns].drop_duplicates(subset=["repo_name"])
 
     # Sort repositories by stars (descending)
     repos_df = repos_df.sort_values("repo_stars", ascending=False)
+
+    # Get GitHub token if not provided
+    if token is None:
+        try:
+            token = get_github_token()
+            logging.info(
+                "Using GitHub token for collecting additional repository metrics"
+            )
+        except ValueError:
+            logging.warning(
+                "No GitHub token found. Cannot collect additional repository metrics."
+            )
+            token = None
+
+    # If we have a token, collect additional metrics for each repository
+    if token:
+        g = Github(token)
+        logging.info(
+            "Connected to GitHub. Rate limit: %d/%d",
+            g.get_rate_limit().core.remaining,
+            g.get_rate_limit().core.limit,
+        )
+
+        # Initialize columns for new metrics
+        repos_df["repo_issues"] = None
+        repos_df["repo_pulls"] = None
+        repos_df["repo_commits"] = None
+        repos_df["repo_contributors"] = None
+
+        # We'll process repositories from most starred to least starred
+        total_repos = len(repos_df)
+        logging.info(f"Collecting additional metrics for {total_repos} repositories...")
+
+        for idx, (_, row) in enumerate(repos_df.iterrows()):
+            repo_name = row["repo_name"]
+            try:
+                logging.info(
+                    f"Processing repository {idx+1}/{total_repos}: {repo_name}"
+                )
+
+                # Get repository object
+                repo = g.get_repo(repo_name)
+
+                # Get metrics using the rate-limited function
+                metrics = get_repository_metrics(repo)
+
+                # Update DataFrame with collected metrics
+                for metric, value in metrics.items():
+                    if value is not None:
+                        repos_df.loc[repos_df["repo_name"] == repo_name, metric] = value
+                        logging.info(f"  - {metric}: {value}")
+
+            except Exception as e:
+                logging.error(f"Error processing repository {repo_name}: {str(e)}")
+    else:
+        logging.warning(
+            "Skipping additional metrics collection due to missing GitHub token"
+        )
 
     # Create a files DataFrame
     files_df = df[["repo_name", "file_path", "file_url"]].copy()
@@ -584,7 +693,7 @@ def main():
     # Process results into data directory
     if result_df is not None and not result_df.empty:
         logging.info("Processing results into data directory...")
-        process_results_to_data_csvs(timestamp=timestamp)
+        process_results_to_data_csvs(timestamp=timestamp, token=token)
 
 
 if __name__ == "__main__":
