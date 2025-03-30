@@ -441,13 +441,16 @@ def get_repository_metrics(repo):
         repo: GitHub repository object
 
     Returns:
-        dict: Dictionary containing repository metrics (issues, pulls, commits, contributors)
+        dict: Dictionary containing repository metrics (issues, pulls, commits, contributors, languages, size)
     """
     metrics = {
         "repo_issues": None,
         "repo_pulls": None,
         "repo_commits": None,
         "repo_contributors": None,
+        "repo_size": None,
+        "repo_languages": None,
+        "repo_primary_language": None,
     }
 
     # Fetch issues count
@@ -475,6 +478,29 @@ def get_repository_metrics(repo):
         logging.warning(
             f"Error getting contributors count for {repo.full_name}: {str(e)}"
         )
+
+    # Fetch repository size (in KB)
+    try:
+        metrics["repo_size"] = repo.size
+    except Exception as e:
+        logging.warning(f"Error getting repository size for {repo.full_name}: {str(e)}")
+
+    # Fetch language statistics
+    try:
+        languages = repo.get_languages()
+        if languages:
+            # Store language stats as a formatted string (JSON would be better but CSV has limitations)
+            lang_stats = "; ".join(
+                [f"{lang}: {bytes}" for lang, bytes in languages.items()]
+            )
+            metrics["repo_languages"] = lang_stats
+
+            # Get primary language (language with most bytes)
+            if languages:
+                primary_language = max(languages.items(), key=lambda x: x[1])[0]
+                metrics["repo_primary_language"] = primary_language
+    except Exception as e:
+        logging.warning(f"Error getting language stats for {repo.full_name}: {str(e)}")
 
     return metrics
 
@@ -572,6 +598,9 @@ def process_results_to_data_csvs(input_file=None, timestamp=None, token=None):
         repos_df["repo_pulls"] = None
         repos_df["repo_commits"] = None
         repos_df["repo_contributors"] = None
+        repos_df["repo_size"] = None
+        repos_df["repo_languages"] = None
+        repos_df["repo_primary_language"] = None
 
         # We'll process repositories from most starred to least starred
         total_repos = len(repos_df)
