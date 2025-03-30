@@ -36,6 +36,20 @@ MAX_RETRIES = 5
 RETRY_DELAY = 60
 MAX_RESULTS_PER_PAGE = 100  # GitHub's maximum allowed results per page
 MAX_SEARCH_RESULTS = 1000  # GitHub's maximum allowed search results
+DATA_DIR = Path(__file__).parent.parent / "data"  # Path to data directory
+
+
+def ensure_data_dir():
+    """
+    Ensure the data directory exists, creating it if necessary.
+
+    Returns:
+        Path: Path to the data directory
+    """
+    if not DATA_DIR.exists():
+        DATA_DIR.mkdir(parents=True)
+        logging.info("Created data directory at %s", DATA_DIR)
+    return DATA_DIR
 
 
 def get_github_token():
@@ -163,6 +177,13 @@ def search_github_repos(query, token=None, output_file="github_cursor_repos.csv"
     if token is None:
         token = get_github_token()
 
+    # Ensure data directory exists
+    data_dir = ensure_data_dir()
+
+    # Convert output_file to full path if it's not already
+    if not os.path.isabs(output_file):
+        output_file = data_dir / output_file
+
     g = Github(token, per_page=MAX_RESULTS_PER_PAGE)
     logging.info(
         "Connected to GitHub. Rate limit: %d/%d",
@@ -243,8 +264,11 @@ def search_with_efficient_partitioning(base_query, token=None, timestamp=None):
     if token is None:
         token = get_github_token()
 
+    # Ensure data directory exists
+    data_dir = ensure_data_dir()
+
     all_results = []
-    combined_file = f"cursor_repos_{timestamp}_combined.csv"
+    combined_file = data_dir / f"cursor_repos_{timestamp}_combined.csv"
 
     # Start with a queue of ranges to process
     # Each item is (min_size, max_size) where None represents unbounded
@@ -390,6 +414,9 @@ def main():
         level=logging.INFO,
         handlers=[logging.StreamHandler(sys.stdout)],
     )
+
+    # Ensure the data directory exists
+    ensure_data_dir()
 
     # Get GitHub token or prompt user to continue without it
     try:
