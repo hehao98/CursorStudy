@@ -37,7 +37,34 @@ RETRY_DELAY = 60
 MAX_RESULTS_PER_PAGE = 100  # GitHub's maximum allowed results per page
 MAX_SEARCH_RESULTS = 1000  # GitHub's maximum allowed search results
 MAX_PARTITION_SIZE = 500  # Sometimes GitHub does not return accurate totalCount, so the partition must be smaller
-DATA_DIR = Path(__file__).parent.parent / "temp"  # Path to data directory
+TEMP_DIR = Path(__file__).parent.parent / "temp"  # Path to temp directory
+DATA_DIR = Path(__file__).parent.parent / "data"  # Path to data directory
+
+
+def ensure_dir(directory):
+    """
+    Ensure the directory exists, creating it if necessary.
+
+    Args:
+        directory (Path): Path to the directory
+
+    Returns:
+        Path: Path to the directory
+    """
+    if not directory.exists():
+        directory.mkdir(parents=True)
+        logging.info("Created directory at %s", directory)
+    return directory
+
+
+def ensure_temp_dir():
+    """
+    Ensure the temp directory exists, creating it if necessary.
+
+    Returns:
+        Path: Path to the temp directory
+    """
+    return ensure_dir(TEMP_DIR)
 
 
 def ensure_data_dir():
@@ -47,10 +74,7 @@ def ensure_data_dir():
     Returns:
         Path: Path to the data directory
     """
-    if not DATA_DIR.exists():
-        DATA_DIR.mkdir(parents=True)
-        logging.info("Created data directory at %s", DATA_DIR)
-    return DATA_DIR
+    return ensure_dir(DATA_DIR)
 
 
 def get_github_token():
@@ -178,12 +202,12 @@ def search_github_repos(query, token=None, output_file="github_cursor_repos.csv"
     if token is None:
         token = get_github_token()
 
-    # Ensure data directory exists
-    data_dir = ensure_data_dir()
+    # Ensure temp directory exists
+    temp_dir = ensure_temp_dir()
 
     # Convert output_file to full path if it's not already
     if not os.path.isabs(output_file):
-        output_file = data_dir / output_file
+        output_file = temp_dir / output_file
 
     g = Github(token, per_page=MAX_RESULTS_PER_PAGE)
     logging.info(
@@ -265,11 +289,11 @@ def search_with_efficient_partitioning(base_query, token=None, timestamp=None):
     if token is None:
         token = get_github_token()
 
-    # Ensure data directory exists
-    data_dir = ensure_data_dir()
+    # Ensure temp directory exists
+    temp_dir = ensure_temp_dir()
 
     all_results = []
-    combined_file = data_dir / f"cursor_repos_{timestamp}_combined.csv"
+    combined_file = temp_dir / f"cursor_repos_{timestamp}_combined.csv"
 
     # Start with a queue of ranges to process
     # Each item is (min_size, max_size) where None represents unbounded
@@ -408,6 +432,84 @@ def search_with_efficient_partitioning(base_query, token=None, timestamp=None):
         return pd.DataFrame()
 
 
+def process_results_to_data_csvs(input_file=None, timestamp=None):
+    """
+    Process the combined results from temp directory into repository and file CSVs in data directory.
+
+    Args:
+        input_file (str, optional): Path to the input CSV file. If None, uses the latest combined file.
+        timestamp (str, optional): Timestamp to use for output filenames. If None, uses current date.
+
+    Returns:
+        tuple: (repos_df, files_df) DataFrames containing the processed data
+    """
+    # Ensure directories exist
+    temp_dir = ensure_temp_dir()
+    data_dir = ensure_data_dir()
+
+    # Set timestamp if not provided
+    if timestamp is None:
+        timestamp = datetime.now().strftime("%Y%m%d")
+
+    # Find the input file if not specified
+    if input_file is None:
+        # Look for the latest combined file in temp directory
+        combined_files = list(temp_dir.glob("cursor_repos_*_combined.csv"))
+        if not combined_files:
+            # Try any cursor_repos file
+            combined_files = list(temp_dir.glob("cursor_repos_*.csv"))
+
+        if not combined_files:
+            raise FileNotFoundError(
+                "No cursor repositories CSV files found in temp directory"
+            )
+
+        # Sort by modification time (most recent first)
+        combined_files.sort(key=lambda f: f.stat().st_mtime, reverse=True)
+        input_file = combined_files[0]
+    elif not os.path.isabs(input_file):
+        input_file = temp_dir / input_file
+
+    logging.info("Processing results from %s", input_file)
+
+    # Read the combined results
+    df = pd.read_csv(input_file)
+    if df.empty:
+        logging.warning("No data found in the input file")
+        return pd.DataFrame(), pd.DataFrame()
+
+    # Create a repositories DataFrame
+    # Group by repository to get unique repositories
+    repos_df = df[
+        [
+            "repo_name",
+            "repo_stars",
+            "repo_forks",
+            "repo_created",
+            "repo_updated",
+            "repo_description",
+        ]
+    ].drop_duplicates(subset=["repo_name"])
+
+    # Sort repositories by stars (descending)
+    repos_df = repos_df.sort_values("repo_stars", ascending=False)
+
+    # Create a files DataFrame
+    files_df = df[["repo_name", "file_path", "file_url"]].copy()
+
+    # Save to data directory
+    repos_output = data_dir / "repos.csv"
+    files_output = data_dir / "cursor_files.csv"
+
+    repos_df.to_csv(repos_output, index=False)
+    files_df.to_csv(files_output, index=False)
+
+    logging.info("Saved %d unique repositories to %s", len(repos_df), repos_output)
+    logging.info("Saved %d cursor files to %s", len(files_df), files_output)
+
+    return repos_df, files_df
+
+
 def main():
     """Main entry point of the script."""
     logging.basicConfig(
@@ -415,6 +517,9 @@ def main():
         level=logging.INFO,
         handlers=[logging.StreamHandler(sys.stdout)],
     )
+
+    # Ensure the temp directory exists
+    ensure_temp_dir()
 
     # Ensure the data directory exists
     ensure_data_dir()
@@ -442,22 +547,26 @@ def main():
     logging.info("Checking initial count for query: %s", QUERY)
     total_count = get_search_count(QUERY, token=token)
 
+    result_df = None
+
     if total_count < MAX_PARTITION_SIZE:
         # If count is within limits, just do a regular search
         logging.info(
             "Query is within GitHub result limits. Proceeding with regular search."
         )
         output_file = f"cursor_repos_{timestamp}.csv"
-        df = search_github_repos(QUERY, token=token, output_file=output_file)
+        result_df = search_github_repos(QUERY, token=token, output_file=output_file)
 
         # Print summary
-        if not df.empty:
+        if not result_df.empty:
             logging.info("\nSearch Summary:")
-            logging.info("Total repositories found: %d", df["repo_name"].nunique())
-            logging.info("Total files found: %d", len(df))
+            logging.info(
+                "Total repositories found: %d", result_df["repo_name"].nunique()
+            )
+            logging.info("Total files found: %d", len(result_df))
             logging.info("Top repositories by stars:")
             top_repos = (
-                df.sort_values("repo_stars", ascending=False)
+                result_df.sort_values("repo_stars", ascending=False)
                 .drop_duplicates("repo_name")
                 .head(5)
             )
@@ -468,7 +577,14 @@ def main():
         logging.info(
             "Query exceeds GitHub result limits. Using adaptive size partitioning."
         )
-        df = search_with_efficient_partitioning(QUERY, token=token, timestamp=timestamp)
+        result_df = search_with_efficient_partitioning(
+            QUERY, token=token, timestamp=timestamp
+        )
+
+    # Process results into data directory
+    if result_df is not None and not result_df.empty:
+        logging.info("Processing results into data directory...")
+        process_results_to_data_csvs(timestamp=timestamp)
 
 
 if __name__ == "__main__":
