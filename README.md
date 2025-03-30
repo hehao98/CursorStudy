@@ -12,6 +12,22 @@ poetry install
 poetry run pre-commit install
 ```
 
+## Environment Variables
+
+This project uses a `.env` file to store sensitive configuration like API tokens. A template file `.env.example` is provided.
+
+1. Copy the example file to create your own `.env` file:
+   ```bash
+   cp .env.example .env
+   ```
+
+2. Edit the `.env` file and replace the placeholder values with your actual credentials:
+   ```
+   GITHUB_TOKEN=your_github_token
+   ```
+
+   You can create a GitHub personal access token at https://github.com/settings/tokens
+
 ## Development
 
 This project uses several development tools:
