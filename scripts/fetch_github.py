@@ -36,7 +36,8 @@ MAX_RETRIES = 5
 RETRY_DELAY = 60
 MAX_RESULTS_PER_PAGE = 100  # GitHub's maximum allowed results per page
 MAX_SEARCH_RESULTS = 1000  # GitHub's maximum allowed search results
-DATA_DIR = Path(__file__).parent.parent / "data"  # Path to data directory
+MAX_PARTITION_SIZE = 500  # Sometimes GitHub does not return accurate totalCount, so the partition must be smaller
+DATA_DIR = Path(__file__).parent.parent / "temp"  # Path to data directory
 
 
 def ensure_data_dir():
@@ -305,11 +306,11 @@ def search_with_efficient_partitioning(base_query, token=None, timestamp=None):
         total_count = get_search_count(query, token=token)
 
         # Check if we need to partition this range
-        if total_count >= MAX_SEARCH_RESULTS:
+        if total_count >= MAX_PARTITION_SIZE:
             logging.warning(
                 "Search count exceeds limit (%d > %d) with range [%s, %s]",
                 total_count,
-                MAX_SEARCH_RESULTS,
+                MAX_PARTITION_SIZE,
                 min_size or "MIN",
                 max_size or "MAX",
             )
@@ -441,7 +442,7 @@ def main():
     logging.info("Checking initial count for query: %s", QUERY)
     total_count = get_search_count(QUERY, token=token)
 
-    if total_count < MAX_SEARCH_RESULTS:
+    if total_count < MAX_PARTITION_SIZE:
         # If count is within limits, just do a regular search
         logging.info(
             "Query is within GitHub result limits. Proceeding with regular search."

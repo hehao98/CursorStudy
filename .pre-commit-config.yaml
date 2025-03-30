@@ -6,6 +6,7 @@ repos:
     -   id: end-of-file-fixer
     -   id: check-yaml
     -   id: check-added-large-files
+        args: ['--maxkb=102400']  # Allow files up to 100MB (102400KB)
     -   id: check-ast
     -   id: check-json
     -   id: check-merge-conflict

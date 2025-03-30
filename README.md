@@ -54,5 +54,5 @@ poetry run pre-commit run --all-files
 
 ### Data Management
 
-- Place your data files in the `data/` directory
-- Add data files to `.gitignore` if they are not meant to be tracked
+- The `data/` directory contains curated data files
+- Add data files to `temp/` if they are not meant to be tracked
