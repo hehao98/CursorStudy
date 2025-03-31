@@ -629,10 +629,53 @@ def process_results_to_data_csvs(input_file=None, timestamp=None, token=None):
     # Create a files DataFrame
     files_df = df[["repo_name", "file_path", "file_url"]].copy()
 
-    # Save to data directory
+    # Define output paths
     repos_output = data_dir / "repos.csv"
     files_output = data_dir / "cursor_files.csv"
 
+    # Read existing data if files exist
+    existing_repos_df = pd.DataFrame()
+    existing_files_df = pd.DataFrame()
+
+    if repos_output.exists():
+        logging.info("Reading existing repositories data from %s", repos_output)
+        existing_repos_df = pd.read_csv(repos_output)
+        logging.info("Found %d existing repositories", len(existing_repos_df))
+
+    if files_output.exists():
+        logging.info("Reading existing files data from %s", files_output)
+        existing_files_df = pd.read_csv(files_output)
+        logging.info("Found %d existing files", len(existing_files_df))
+
+    # Combine new and existing data, removing duplicates
+    if not existing_repos_df.empty:
+        # For repositories, we want to keep the most recent data
+        # So we'll use the new data for any overlapping repositories
+        repos_df = (
+            pd.concat([existing_repos_df, repos_df])
+            .drop_duplicates(subset=["repo_name"], keep="last")
+            .sort_values("repo_stars", ascending=False)
+        )
+        logging.info(
+            "Combined repositories: %d total (including %d new)",
+            len(repos_df),
+            len(repos_df) - len(existing_repos_df),
+        )
+
+    if not existing_files_df.empty:
+        # For files, we want to keep unique combinations of repo_name and file_path
+        files_df = (
+            pd.concat([existing_files_df, files_df])
+            .drop_duplicates(subset=["repo_name", "file_path"])
+            .sort_values(["repo_name", "file_path"], ascending=False)
+        )
+        logging.info(
+            "Combined files: %d total (including %d new)",
+            len(files_df),
+            len(files_df) - len(existing_files_df),
+        )
+
+    # Save to data directory
     repos_df.to_csv(repos_output, index=False)
     files_df.to_csv(files_output, index=False)
 
