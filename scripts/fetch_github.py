@@ -15,6 +15,7 @@ The script handles rate limiting from GitHub's API and provides detailed logging
 of the search process.
 """
 
+import argparse
 import logging
 import os
 import sys
@@ -29,6 +30,7 @@ from github import Github, RateLimitExceededException
 
 # Settings for the search
 QUERY = "path:.cursorrules OR path:.cursor/"
+LEGACY_QUERY = "filename:.cursorrules OR filename:.cursorignore"
 MAX_RETRIES = 5
 RETRY_DELAY = 60
 MAX_RESULTS_PER_PAGE = 100  # GitHub's maximum allowed results per page
@@ -642,6 +644,15 @@ def process_results_to_data_csvs(input_file=None, timestamp=None, token=None):
 
 def main():
     """Main entry point of the script."""
+    # Set up argument parser
+    parser = argparse.ArgumentParser(
+        description="Search GitHub for Cursor-related files."
+    )
+    parser.add_argument(
+        "--legacy", action="store_true", help="Use legacy query pattern"
+    )
+    args = parser.parse_args()
+
     logging.basicConfig(
         format="%(asctime)s (PID %(process)d) [%(levelname)s] %(filename)s:%(lineno)d %(message)s",
         level=logging.INFO,
@@ -673,9 +684,12 @@ def main():
     # Generate timestamp for file naming
     timestamp = datetime.now().strftime("%Y%m%d")
 
+    # Select query based on command line argument
+    search_query = LEGACY_QUERY if args.legacy else QUERY
+
     # First check the total count to see if we need partitioning
-    logging.info("Checking initial count for query: %s", QUERY)
-    total_count = get_search_count(QUERY, token=token)
+    logging.info("Checking initial count for query: %s", search_query)
+    total_count = get_search_count(search_query, token=token)
 
     result_df = None
 
@@ -685,7 +699,9 @@ def main():
             "Query is within GitHub result limits. Proceeding with regular search."
         )
         output_file = f"cursor_repos_{timestamp}.csv"
-        result_df = search_github_repos(QUERY, token=token, output_file=output_file)
+        result_df = search_github_repos(
+            search_query, token=token, output_file=output_file
+        )
 
         # Print summary
         if not result_df.empty:
@@ -708,7 +724,7 @@ def main():
             "Query exceeds GitHub result limits. Using adaptive size partitioning."
         )
         result_df = search_with_efficient_partitioning(
-            QUERY, token=token, timestamp=timestamp
+            search_query, token=token, timestamp=timestamp
         )
 
     # Process results into data directory
