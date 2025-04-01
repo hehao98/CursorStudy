@@ -1,0 +1,72 @@
+---
+title: "ProjectDataExploration"
+author: "C. Miller"
+date: "2025-04-01"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(gridExtra)
+library(ggpubr)
+library(readr)
+library(tidyr)
+library(RMySQL)
+library(DBI)
+library(gt)
+library(ggvenn)
+library(lubridate)
+library(purrr)
+library(tibble)
+library(tidyverse)
+library(numbers)
+library(ggridges)
+library(hrbrthemes)
+library(jsonlite)
+
+# importing dataset with data for all repos (no qualitfying filter)
+allRepos <- read_csv("~/Desktop/CursorStudy/data/repos.csv")
+
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+# looking at distribution of primary language
+```{r}
+# Create bar plot of primary languages
+ggplot(allRepos, aes(x = reorder(repo_primary_language, repo_primary_language, function(x) -length(x)))) +
+  geom_bar() +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(x = "Primary Language",
+       y = "Number of Projects",
+       title = "Distribution of Primary Languages Across Projects") +
+  scale_y_continuous(expand = c(0, 0))
+
+```
+# Looking at the data, we can see that the vast majority of projects are have a primary language of typescript
+
+
+```{r}
+allRepos %>%
+  group_by(repo_primary_language) %>%
+  summarise(numRepos = n()) %>%
+  arrange(desc(numRepos)) %>%
+  gt() %>%
+  tab_header(
+    title = "Number of Projects by Primary Language"
+  ) %>%
+  cols_label(
+    repo_primary_language = "Primary Language",
+    numRepos = "Number of Repositories"
+  )
+
+nrow(allRepos)
+table(allRepos$repo_primary_language)
+```
+
+
+
