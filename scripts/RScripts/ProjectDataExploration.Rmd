@@ -34,10 +34,10 @@ knitr::opts_chunk$set(echo = TRUE)
 
 
 
-# looking at distribution of primary language
+# looking at distribution of primary language (for all projects with at least 10 stars)
 ```{r}
 # Create bar plot of primary languages
-ggplot(allRepos, aes(x = reorder(repo_primary_language, repo_primary_language, function(x) -length(x)))) +
+ggplot(allRepos %>% filter(repo_stars >= 10), aes(x = reorder(repo_primary_language, repo_primary_language, function(x) -length(x)))) +
   geom_bar() +
   theme_minimal() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
@@ -51,7 +51,7 @@ ggplot(allRepos, aes(x = reorder(repo_primary_language, repo_primary_language, f
 
 
 ```{r}
-allRepos %>%
+allRepos %>% filter(repo_stars >= 10) %>% 
   group_by(repo_primary_language) %>%
   summarise(numRepos = n()) %>%
   arrange(desc(numRepos)) %>%
