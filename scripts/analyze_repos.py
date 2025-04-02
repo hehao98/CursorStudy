@@ -43,7 +43,9 @@ def get_weekly_commit_stats(repo_path: Path) -> Optional[Dict[str, Dict[str, int
         repo = git.Repo(str(repo_path))
 
         # Initialize weekly stats counter
-        weekly_stats = defaultdict(lambda: {"commits": 0, "lines_added": 0})
+        weekly_stats = defaultdict(
+            lambda: {"commits": 0, "lines_added": 0, "contributors": set()}
+        )
 
         # Iterate through all commits
         for commit in repo.iter_commits():
@@ -53,6 +55,8 @@ def get_weekly_commit_stats(repo_path: Path) -> Optional[Dict[str, Dict[str, int
             week_key = commit_time.strftime("%Y-W%W")
             # Increment commit counter for this week
             weekly_stats[week_key]["commits"] += 1
+            # Add author name to contributors set for this week
+            weekly_stats[week_key]["contributors"].add(commit.author.name)
 
             # Count lines added in this commit
             try:
@@ -74,7 +78,16 @@ def get_weekly_commit_stats(repo_path: Path) -> Optional[Dict[str, Dict[str, int
                 logging.debug("Could not get diff for commit %s: %s", commit.hexsha, e)
                 continue
 
-        return dict(weekly_stats)
+        # Convert sets of contributors to counts
+        result = {}
+        for week, stats in weekly_stats.items():
+            result[week] = {
+                "commits": stats["commits"],
+                "lines_added": stats["lines_added"],
+                "contributors": len(stats["contributors"]),
+            }
+
+        return result
     except Exception as e:
         logging.error("Failed to get commit info for %s: %s", repo_path, str(e))
         return None
@@ -170,6 +183,7 @@ def process_repository(
                     "week": week,
                     "commits": stats["commits"],
                     "lines_added": stats["lines_added"],
+                    "contributors": stats["contributors"],
                 }
             )
 
