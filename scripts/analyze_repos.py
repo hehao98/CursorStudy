@@ -22,9 +22,10 @@ import pandas as pd
 # Constants
 REPOS_CSV = Path(__file__).parent.parent / "data" / "repos.csv"
 CURSOR_FILES_CSV = Path(__file__).parent.parent / "data" / "cursor_files.csv"
+CURSOR_COMMITS_CSV = Path(__file__).parent.parent / "data" / "cursor_commits.csv"
 CLONE_DIR = Path(__file__).parent.parent.parent / "CursorRepos"
-OUTPUT_FILE = Path(__file__).parent.parent / "data" / "repo_ts.csv"
-CONTRIBUTOR_OUTPUT_FILE = Path(__file__).parent.parent / "data" / "contributor_ts.csv"
+OUTPUT_FILE = Path(__file__).parent.parent / "data" / "ts_repos.csv"
+CONTRIBUTOR_OUTPUT_FILE = Path(__file__).parent.parent / "data" / "ts_contributors.csv"
 NUM_PROCESSES = 8
 
 
@@ -159,9 +160,58 @@ def find_cursor_file_introduction(
         return None
 
 
+def find_cursor_file_commits(repo_path: Path, cursor_files: List[str]) -> List[Dict]:
+    """
+    Find all commits that modified cursor files in a repository.
+
+    Args:
+        repo_path (Path): Path to the repository
+        cursor_files (list): List of cursor file paths to check
+
+    Returns:
+        List of dictionaries containing commit information
+    """
+    commits_data = []
+
+    try:
+        repo = git.Repo(str(repo_path))
+        repo_name = repo_path.name.replace("_", "/")
+
+        for file_path in cursor_files:
+            # Skip if file doesn't exist in the repo
+            if not (repo_path / file_path).exists():
+                continue
+
+            try:
+                # Get all commits that modified this file
+                for commit in repo.iter_commits(paths=file_path):
+                    commit_time = datetime.fromtimestamp(commit.committed_date)
+
+                    commits_data.append(
+                        {
+                            "repo_name": repo_name,
+                            "commit_hash": commit.hexsha,
+                            "author": f"{commit.author.name} <{commit.author.email}>",
+                            "committed_date": commit_time.isoformat(),
+                            "message": commit.message.strip().split("\n")[
+                                0
+                            ],  # First line of commit message
+                            "cursor_file": file_path,
+                        }
+                    )
+            except Exception as e:
+                logging.debug(f"Error processing commits for {file_path}: {e}")
+                continue
+
+        return commits_data
+    except Exception as e:
+        logging.error(f"Failed to find cursor file commits in {repo_path}: {e}")
+        return []
+
+
 def process_repository(
     idx: int, repo: Dict, repo_cursor_files: Dict[str, List[str]], total_repos: int
-) -> Tuple[List[Dict], Dict[str, str], List[Dict]]:
+) -> Tuple[List[Dict], Dict[str, str], List[Dict], List[Dict]]:
     """
     Process a single repository in a worker process.
 
@@ -172,19 +222,21 @@ def process_repository(
         total_repos: Total number of repositories
 
     Returns:
-        Tuple of (repo_ts, adoption_date, contributor_ts) where:
+        Tuple of (repo_ts, adoption_date, contributor_ts, cursor_commits) where:
             repo_ts: List of weekly statistics dictionaries
             adoption_date: Dictionary mapping repo_name to cursor adoption date
             contributor_ts: List of contributor statistics dictionaries
+            cursor_commits: List of commits modifying cursor files
     """
     repo_name = repo["repo_name"]
     repo_path = CLONE_DIR / repo_name.replace("/", "_")
     repo_ts = []
     contributor_ts = []
+    cursor_commits = []
     adoption_date = {}
 
     if not repo_path.exists():
-        return repo_ts, adoption_date, contributor_ts
+        return repo_ts, adoption_date, contributor_ts, cursor_commits
 
     logging.info("Analyzing repository: %s (%d/%d)", repo_name, idx + 1, total_repos)
 
@@ -194,6 +246,11 @@ def process_repository(
         if introduction_date:
             adoption_date[repo_name] = introduction_date.isoformat()
             logging.info("Found cursor adoption date: %s", introduction_date)
+
+        # Find commits that modified cursor files
+        cursor_commits = find_cursor_file_commits(repo_path, cursor_files)
+        if cursor_commits:
+            logging.info("Found %d commits modifying cursor files", len(cursor_commits))
 
     weekly_stats, contributor_stats = get_weekly_commit_stats(repo_path)
     if weekly_stats:
@@ -211,7 +268,7 @@ def process_repository(
     if contributor_stats:
         contributor_ts.extend(contributor_stats)
 
-    return repo_ts, adoption_date, contributor_ts
+    return repo_ts, adoption_date, contributor_ts, cursor_commits
 
 
 def main() -> None:
@@ -251,15 +308,22 @@ def main() -> None:
 
     repo_ts = []
     contributor_ts = []
+    cursor_commits = []
     adoption_dates = {}
 
     logging.info("Starting multiprocessing pool with %d workers", NUM_PROCESSES)
     with multiprocessing.Pool(processes=NUM_PROCESSES) as pool:
         results = pool.starmap(process_repository, args_list)
 
-        for repo_time_series, repo_adoption_date, repo_contributor_ts in results:
+        for (
+            repo_time_series,
+            repo_adoption_date,
+            repo_contributor_ts,
+            repo_cursor_commits,
+        ) in results:
             repo_ts.extend(repo_time_series)
             contributor_ts.extend(repo_contributor_ts)
+            cursor_commits.extend(repo_cursor_commits)
             adoption_dates.update(repo_adoption_date)
 
     logging.info("Finished processing %d repos", total_repos)
@@ -274,6 +338,13 @@ def main() -> None:
         contributor_df.to_csv(CONTRIBUTOR_OUTPUT_FILE, index=False)
         logging.info(
             "Saved contributor time series data to %s", CONTRIBUTOR_OUTPUT_FILE
+        )
+
+    if cursor_commits:
+        cursor_commits_df = pd.DataFrame(cursor_commits)
+        cursor_commits_df.to_csv(CURSOR_COMMITS_CSV, index=False)
+        logging.info(
+            "Saved %d cursor commits to %s", len(cursor_commits), CURSOR_COMMITS_CSV
         )
 
     if adoption_dates:
