@@ -9,30 +9,13 @@ output: html_document
 library(readr)
 library(dplyr)
 library(ggplot2)
-library(gridExtra)
-library(ggpubr)
-library(readr)
-library(tidyr)
-library(RMySQL)
-library(DBI)
 library(gt)
-library(ggvenn)
-library(lubridate)
-library(purrr)
-library(tibble)
-library(tidyverse)
-library(numbers)
-library(ggridges)
-library(hrbrthemes)
-library(jsonlite)
 
 # importing dataset with data for all repos (no qualitfying filter)
-allRepos <- read_csv("~/Desktop/CursorStudy/data/repos.csv")
+allRepos <- read_csv("../data/repos.csv")
 
 knitr::opts_chunk$set(echo = TRUE)
 ```
-
-
 
 # looking at distribution of primary language (for all projects with at least 10 stars)
 ```{r}
@@ -49,9 +32,8 @@ ggplot(allRepos %>% filter(repo_stars >= 10), aes(x = reorder(repo_primary_langu
 ```
 # Looking at the data, we can see that the vast majority of projects are have a primary language of typescript
 
-
 ```{r}
-allRepos %>% filter(repo_stars >= 10) %>% 
+allRepos %>% filter(repo_stars >= 10) %>%
   group_by(repo_primary_language) %>%
   summarise(numRepos = n()) %>%
   arrange(desc(numRepos)) %>%
@@ -67,6 +49,3 @@ allRepos %>% filter(repo_stars >= 10) %>%
 nrow(allRepos)
 table(allRepos$repo_primary_language)
 ```
-
-
-
