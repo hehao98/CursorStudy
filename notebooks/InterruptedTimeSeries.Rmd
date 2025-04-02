@@ -1,0 +1,38 @@
+---
+title: "How Does the Adoption of Cursor Affect Software Development Productivity?"
+author: "Hao He"
+date: "2025-04-02"
+output: html_document
+---
+
+## Methodology Overview
+
+### Modeling Strategy
+
+We have two possible modeling strategies: **model per user** or **model per repository**.
+
+- The former represents individual-level micro outcomes. It makes more sense to assume that the user adding or modifying a cursor configuration file is definitely using Cursor. However, individual-level outcomes may be more noisy. For example, one can give up contribution entirely in a specific time period for other reasons.
+- The latter represents project-level macro outcomes, but is potentially confounded by the extent of Cursor adoption in each time period. It is possible that the project has 100 developers but only one of them adopts Cursor. The macro outcome is also potentially confounded by the size/resource of the team in each time period.
+
+I am inclined to implement both and compare the results.
+
+### Outcome (Productivity) Metrics
+
+1. Number of commits in each time period
+2. Number of lines added in each time period
+
+Neither of them are perfect, but our Interrupted Time Series Analysis (ITS) should be able to somewhat handle the inherent problems of these metrics. For example, the project-level fixed effect dummies in the below specification should be able to account for commit volume differences across different projects.
+
+### Model Specification
+
+We use a pooled Interrupted Time Series Analysis (ITS) model, with project-level mixed effects and time-varying control variables, to estimate the effect of Cursor adoption on productivity.
+
+$$
+y_{it} = \beta_0 + \beta_1 X_{it} + \beta_2 T_{it} + \beta_3 X_{it} T_{ti} + \sum_{j=1}^{n} \gamma_j Z^j_{it} + u_i T_{it} + v_i X_{it} + w_i X_{it} T_{it} + \epsilon_{it}
+$$
+
+where $y_{it}$ is the outcome variable, $X_{it}$ is a binary variable indicating whether the user is using Cursor, $T_it$ is a categorical variable indicating the time period, $Z^j_{it}$ are time-varying control variables, $u_i$, $v_i$, and $w_i$ are project-level fixed effects, and $\epsilon_{it}$ is an autocorrelated error term (we assume an $AR(1)$ process for simplicity).
+
+```{r}
+
+```
