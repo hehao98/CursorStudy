@@ -1,0 +1,16 @@
+---
+description:
+globs: *.py
+alwaysApply: false
+---
+For logging calls, use the built-in string formatting instead of f"".
+
+Do not write code comments for less than three lines of code. Only for large code blocks that are not easily understood.
+
+Create a stand-alone function for repetitive code.
+
+Try to avoid lines longer than 88 characters whenever possible. YOu can use shorter variable names in this case.
+
+Use type annotation for all function signatures and return values.
+
+Do not add un-used imports.
