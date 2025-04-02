@@ -191,12 +191,12 @@ def find_cursor_file_commits(repo_path: Path, cursor_files: List[str]) -> List[D
                         {
                             "repo_name": repo_name,
                             "commit_hash": commit.hexsha,
-                            "author": f"{commit.author.name} <{commit.author.email}>",
-                            "committed_date": commit_time.isoformat(),
-                            "message": commit.message.strip().split("\n")[
-                                0
-                            ],  # First line of commit message
                             "cursor_file": file_path,
+                            "author": f"{commit.author.name} <{commit.author.email}>",
+                            "author_date": commit.author_date,
+                            "committer": f"{commit.committer.name} <{commit.committer.email}>",
+                            "committed_date": commit_time.isoformat(),
+                            "message": commit.message,
                         }
                     )
             except Exception as e:
