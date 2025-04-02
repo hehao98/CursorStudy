@@ -9,6 +9,7 @@ This script:
 """
 
 import logging
+import multiprocessing
 import sys
 from collections import defaultdict
 from datetime import datetime
@@ -23,6 +24,7 @@ REPOS_CSV = Path(__file__).parent.parent / "data" / "repos.csv"
 CURSOR_FILES_CSV = Path(__file__).parent.parent / "data" / "cursor_files.csv"
 CLONE_DIR = Path(__file__).parent.parent.parent / "CursorRepos"
 OUTPUT_FILE = Path(__file__).parent.parent / "data" / "repo_ts.csv"
+NUM_PROCESSES = 8
 
 
 def get_monthly_commit_stats(repo_path: Path) -> Optional[Dict[str, Dict[str, int]]]:
@@ -121,6 +123,59 @@ def find_cursor_file_introduction(
         return None
 
 
+def process_repository(
+    idx: int, repo: Dict, repo_cursor_files: Dict[str, List[str]], total_repos: int
+) -> Tuple[List[Dict], Dict[str, str]]:
+    """
+    Process a single repository in a worker process.
+
+    Args:
+        idx: Index of the repository in the dataframe
+        repo: Repository data from the dataframe
+        repo_cursor_files: Mapping of repo names to cursor files
+        total_repos: Total number of repositories
+
+    Returns:
+        Tuple of (repo_ts, adoption_date) where:
+            repo_ts: List of monthly statistics dictionaries
+            adoption_date: Dictionary mapping repo_name to cursor adoption date
+    """
+    repo_name = repo["repo_name"]
+    repo_path = CLONE_DIR / repo_name.replace("/", "_")
+    repo_ts = []
+    adoption_date = {}
+
+    # Skip if repository is not cloned
+    if not repo_path.exists():
+        return repo_ts, adoption_date
+
+    logging.info("Analyzing repository: %s (%d/%d)", repo_name, idx + 1, total_repos)
+
+    # Find cursor file introduction if this repo has cursor files
+    if repo_name in repo_cursor_files:
+        cursor_files = repo_cursor_files[repo_name]
+        introduction_date = find_cursor_file_introduction(repo_path, cursor_files)
+        if introduction_date:
+            adoption_date[repo_name] = introduction_date.isoformat()
+            logging.info("Found cursor adoption date: %s", introduction_date)
+
+    # Get monthly commit stats
+    monthly_stats = get_monthly_commit_stats(repo_path)
+    if monthly_stats:
+        # Add repo data to each month entry
+        for month, stats in monthly_stats.items():
+            repo_ts.append(
+                {
+                    "repo_name": repo_name,
+                    "month": month,
+                    "commits": stats["commits"],
+                    "lines_added": stats["lines_added"],
+                }
+            )
+
+    return repo_ts, adoption_date
+
+
 def main() -> None:
     """Main function to analyze repositories, get commit stats and cursor adoption dates."""
     logging.basicConfig(
@@ -128,6 +183,9 @@ def main() -> None:
         level=logging.INFO,
         handlers=[logging.StreamHandler(sys.stdout)],
     )
+
+    # Required for Windows multiprocessing
+    multiprocessing.freeze_support()
 
     if not CLONE_DIR.exists():
         logging.error("Clone directory %s does not exist", CLONE_DIR)
@@ -151,48 +209,26 @@ def main() -> None:
     for _, row in cursor_files_df.iterrows():
         repo_cursor_files[row["repo_name"]].append(row["file_path"])
 
-    # Store results
+    # Prepare arguments for parallel processing using starmap
+    total_repos = len(repos_df)
+    args_list = [
+        (idx, repo, repo_cursor_files, total_repos) for idx, repo in repos_df.iterrows()
+    ]
+
+    # Initialize results containers
     repo_ts = []
     adoption_dates = {}
-    total_repos = len(repos_df)
 
-    for idx, repo in repos_df.iterrows():
-        repo_name = repo["repo_name"]
-        repo_path = CLONE_DIR / repo_name.replace("/", "_")
+    # Create and start the multiprocessing pool
+    logging.info("Starting multiprocessing pool with %d workers", NUM_PROCESSES)
+    with multiprocessing.Pool(processes=NUM_PROCESSES) as pool:
+        results = pool.starmap(process_repository, args_list)
 
-        # Skip if repository is not cloned
-        if not repo_path.exists():
-            continue
+        for repo_time_series, repo_adoption_date in results:
+            repo_ts.extend(repo_time_series)
+            adoption_dates.update(repo_adoption_date)
 
-        logging.info(
-            "Analyzing repository: %s (%d/%d)", repo_name, idx + 1, total_repos
-        )
-
-        # Find cursor file introduction if this repo has cursor files
-        if repo_name in repo_cursor_files:
-            cursor_files = repo_cursor_files[repo_name]
-            introduction_date = find_cursor_file_introduction(repo_path, cursor_files)
-            if introduction_date:
-                adoption_dates[repo_name] = introduction_date.isoformat()
-                logging.info("Found cursor adoption date: %s", introduction_date)
-
-        # Get monthly commit stats
-        monthly_stats = get_monthly_commit_stats(repo_path)
-        if monthly_stats:
-            # Add repo data to each month entry
-            for month, stats in monthly_stats.items():
-                repo_ts.append(
-                    {
-                        "repo_name": repo_name,
-                        "month": month,
-                        "commits": stats["commits"],
-                        "lines_added": stats["lines_added"],
-                    }
-                )
-
-        # Log progress periodically
-        if (idx + 1) % 10 == 0:
-            logging.info("Progress: %d/%d repositories processed", idx + 1, total_repos)
+    logging.info("Finished processing %d repos", total_repos)
 
     # Save time series data
     if repo_ts:
