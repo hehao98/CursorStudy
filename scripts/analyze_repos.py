@@ -5,7 +5,7 @@ Script to analyze repositories cloned by clone_repos.py.
 This script:
 1. Reads repos.csv file and checks which repositories have been cloned
 2. Detects when cursor files were first introduced in each repository
-3. Collects a time series of monthly commit counts and lines added for each repository
+3. Collects a time series of weekly commit counts and lines added for each repository
 """
 
 import logging
@@ -27,32 +27,32 @@ OUTPUT_FILE = Path(__file__).parent.parent / "data" / "repo_ts.csv"
 NUM_PROCESSES = 8
 
 
-def get_monthly_commit_stats(repo_path: Path) -> Optional[Dict[str, Dict[str, int]]]:
+def get_weekly_commit_stats(repo_path: Path) -> Optional[Dict[str, Dict[str, int]]]:
     """
-    Get monthly commit counts and lines added for a repository.
+    Get weekly commit counts and lines added for a repository.
 
     Args:
         repo_path (Path): Path to the repository
 
     Returns:
-        dict: Dictionary with month as key (YYYY-MM format) and dict of stats as value
+        dict: Dictionary with week as key (YYYY-WXX format) and dict of stats as value
               or None if failed
     """
     try:
         # Open the repository
         repo = git.Repo(str(repo_path))
 
-        # Initialize monthly stats counter
-        monthly_stats = defaultdict(lambda: {"commits": 0, "lines_added": 0})
+        # Initialize weekly stats counter
+        weekly_stats = defaultdict(lambda: {"commits": 0, "lines_added": 0})
 
         # Iterate through all commits
         for commit in repo.iter_commits():
             # Get commit time and convert to datetime
             commit_time = datetime.fromtimestamp(commit.committed_date)
-            # Format as YYYY-MM
-            month_key = commit_time.strftime("%Y-%m")
-            # Increment commit counter for this month
-            monthly_stats[month_key]["commits"] += 1
+            # Format as YYYY-WXX (ISO week format)
+            week_key = commit_time.strftime("%Y-W%W")
+            # Increment commit counter for this week
+            weekly_stats[week_key]["commits"] += 1
 
             # Count lines added in this commit
             try:
@@ -69,12 +69,12 @@ def get_monthly_commit_stats(repo_path: Path) -> Optional[Dict[str, Dict[str, in
                                 for line in diff_text.splitlines()
                                 if line.startswith("+") and not line.startswith("+++")
                             )
-                            monthly_stats[month_key]["lines_added"] += added_lines
+                            weekly_stats[week_key]["lines_added"] += added_lines
             except Exception as e:
                 logging.debug("Could not get diff for commit %s: %s", commit.hexsha, e)
                 continue
 
-        return dict(monthly_stats)
+        return dict(weekly_stats)
     except Exception as e:
         logging.error("Failed to get commit info for %s: %s", repo_path, str(e))
         return None
@@ -137,7 +137,7 @@ def process_repository(
 
     Returns:
         Tuple of (repo_ts, adoption_date) where:
-            repo_ts: List of monthly statistics dictionaries
+            repo_ts: List of weekly statistics dictionaries
             adoption_date: Dictionary mapping repo_name to cursor adoption date
     """
     repo_name = repo["repo_name"]
@@ -159,15 +159,15 @@ def process_repository(
             adoption_date[repo_name] = introduction_date.isoformat()
             logging.info("Found cursor adoption date: %s", introduction_date)
 
-    # Get monthly commit stats
-    monthly_stats = get_monthly_commit_stats(repo_path)
-    if monthly_stats:
-        # Add repo data to each month entry
-        for month, stats in monthly_stats.items():
+    # Get weekly commit stats
+    weekly_stats = get_weekly_commit_stats(repo_path)
+    if weekly_stats:
+        # Add repo data to each week entry
+        for week, stats in weekly_stats.items():
             repo_ts.append(
                 {
                     "repo_name": repo_name,
-                    "month": month,
+                    "week": week,
                     "commits": stats["commits"],
                     "lines_added": stats["lines_added"],
                 }
