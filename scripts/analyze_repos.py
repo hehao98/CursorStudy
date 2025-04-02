@@ -26,7 +26,7 @@ CURSOR_COMMITS_CSV = Path(__file__).parent.parent / "data" / "cursor_commits.csv
 CLONE_DIR = Path(__file__).parent.parent.parent / "CursorRepos"
 OUTPUT_FILE = Path(__file__).parent.parent / "data" / "ts_repos.csv"
 CONTRIBUTOR_OUTPUT_FILE = Path(__file__).parent.parent / "data" / "ts_contributors.csv"
-NUM_PROCESSES = 8
+NUM_PROCESSES = multiprocessing.cpu_count() // 2
 
 
 def get_weekly_commit_stats(
