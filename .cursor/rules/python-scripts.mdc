@@ -5,7 +5,7 @@ alwaysApply: false
 ---
 For logging calls, use the built-in string formatting instead of f"".
 
-Do not write code comments for less than three lines of code. Only for large code blocks that are not easily understood.
+Do not write code comments for trivial pieces of code. Only for large code blocks that are not easily understood. Remove existing code comments if they explain a trivial piece of code.
 
 Create a stand-alone function for repetitive code.
 

@@ -24,10 +24,13 @@ REPOS_CSV = Path(__file__).parent.parent / "data" / "repos.csv"
 CURSOR_FILES_CSV = Path(__file__).parent.parent / "data" / "cursor_files.csv"
 CLONE_DIR = Path(__file__).parent.parent.parent / "CursorRepos"
 OUTPUT_FILE = Path(__file__).parent.parent / "data" / "repo_ts.csv"
+CONTRIBUTOR_OUTPUT_FILE = Path(__file__).parent.parent / "data" / "contributor_ts.csv"
 NUM_PROCESSES = 8
 
 
-def get_weekly_commit_stats(repo_path: Path) -> Optional[Dict[str, Dict[str, int]]]:
+def get_weekly_commit_stats(
+    repo_path: Path,
+) -> Tuple[Optional[Dict[str, Dict[str, int]]], Optional[List[Dict]]]:
     """
     Get weekly commit counts and lines added for a repository.
 
@@ -35,50 +38,58 @@ def get_weekly_commit_stats(repo_path: Path) -> Optional[Dict[str, Dict[str, int
         repo_path (Path): Path to the repository
 
     Returns:
-        dict: Dictionary with week as key (YYYY-WXX format) and dict of stats as value
-              or None if failed
+        Tuple containing:
+            1. dict: Dictionary with week as key (YYYY-WXX format) and dict of stats as value
+                  or None if failed
+            2. list: List of contributor-specific stats dictionaries
+                  or None if failed
     """
     try:
-        # Open the repository
         repo = git.Repo(str(repo_path))
+        repo_name = repo_path.name
 
-        # Initialize weekly stats counter
         weekly_stats = defaultdict(
             lambda: {"commits": 0, "lines_added": 0, "contributors": set()}
         )
 
-        # Iterate through all commits
-        for commit in repo.iter_commits():
-            # Get commit time and convert to datetime
-            commit_time = datetime.fromtimestamp(commit.committed_date)
-            # Format as YYYY-WXX (ISO week format)
-            week_key = commit_time.strftime("%Y-W%W")
-            # Increment commit counter for this week
-            weekly_stats[week_key]["commits"] += 1
-            # Add author name to contributors set for this week
-            weekly_stats[week_key]["contributors"].add(commit.author.name)
+        contributor_stats = []
 
-            # Count lines added in this commit
+        contributor_weekly_stats = defaultdict(
+            lambda: defaultdict(lambda: {"commits": 0, "lines_added": 0})
+        )
+
+        for commit in repo.iter_commits():
+            commit_time = datetime.fromtimestamp(commit.committed_date)
+            week_key = commit_time.strftime("%Y-W%W")
+            author_str = f"{commit.author.name} <{commit.author.email}>"
+
+            weekly_stats[week_key]["commits"] += 1
+            weekly_stats[week_key]["contributors"].add(author_str)
+            contributor_weekly_stats[week_key][author_str]["commits"] += 1
+
             try:
                 if commit.parents:
                     parent = commit.parents[0]
                     diff = parent.diff(commit)
+                    added_lines = 0
                     for diff_item in diff:
-                        # Count added lines from the diff stats
                         if hasattr(diff_item, "diff"):
                             diff_text = diff_item.diff.decode("utf-8", errors="replace")
                             # Count additions (lines starting with '+' but not '+++')
-                            added_lines = sum(
+                            added_lines += sum(
                                 1
                                 for line in diff_text.splitlines()
                                 if line.startswith("+") and not line.startswith("+++")
                             )
-                            weekly_stats[week_key]["lines_added"] += added_lines
+
+                    weekly_stats[week_key]["lines_added"] += added_lines
+                    contributor_weekly_stats[week_key][author_str][
+                        "lines_added"
+                    ] += added_lines
             except Exception as e:
                 logging.debug("Could not get diff for commit %s: %s", commit.hexsha, e)
                 continue
 
-        # Convert sets of contributors to counts
         result = {}
         for week, stats in weekly_stats.items():
             result[week] = {
@@ -87,10 +98,22 @@ def get_weekly_commit_stats(repo_path: Path) -> Optional[Dict[str, Dict[str, int
                 "contributors": len(stats["contributors"]),
             }
 
-        return result
+        for week, authors in contributor_weekly_stats.items():
+            for author, stats in authors.items():
+                contributor_stats.append(
+                    {
+                        "repo_name": repo_name,
+                        "author": author,
+                        "week": week,
+                        "commits": stats["commits"],
+                        "lines_added": stats["lines_added"],
+                    }
+                )
+
+        return result, contributor_stats
     except Exception as e:
         logging.error("Failed to get commit info for %s: %s", repo_path, str(e))
-        return None
+        return None, None
 
 
 def find_cursor_file_introduction(
@@ -138,7 +161,7 @@ def find_cursor_file_introduction(
 
 def process_repository(
     idx: int, repo: Dict, repo_cursor_files: Dict[str, List[str]], total_repos: int
-) -> Tuple[List[Dict], Dict[str, str]]:
+) -> Tuple[List[Dict], Dict[str, str], List[Dict]]:
     """
     Process a single repository in a worker process.
 
@@ -149,22 +172,22 @@ def process_repository(
         total_repos: Total number of repositories
 
     Returns:
-        Tuple of (repo_ts, adoption_date) where:
+        Tuple of (repo_ts, adoption_date, contributor_ts) where:
             repo_ts: List of weekly statistics dictionaries
             adoption_date: Dictionary mapping repo_name to cursor adoption date
+            contributor_ts: List of contributor statistics dictionaries
     """
     repo_name = repo["repo_name"]
     repo_path = CLONE_DIR / repo_name.replace("/", "_")
     repo_ts = []
+    contributor_ts = []
     adoption_date = {}
 
-    # Skip if repository is not cloned
     if not repo_path.exists():
-        return repo_ts, adoption_date
+        return repo_ts, adoption_date, contributor_ts
 
     logging.info("Analyzing repository: %s (%d/%d)", repo_name, idx + 1, total_repos)
 
-    # Find cursor file introduction if this repo has cursor files
     if repo_name in repo_cursor_files:
         cursor_files = repo_cursor_files[repo_name]
         introduction_date = find_cursor_file_introduction(repo_path, cursor_files)
@@ -172,10 +195,8 @@ def process_repository(
             adoption_date[repo_name] = introduction_date.isoformat()
             logging.info("Found cursor adoption date: %s", introduction_date)
 
-    # Get weekly commit stats
-    weekly_stats = get_weekly_commit_stats(repo_path)
+    weekly_stats, contributor_stats = get_weekly_commit_stats(repo_path)
     if weekly_stats:
-        # Add repo data to each week entry
         for week, stats in weekly_stats.items():
             repo_ts.append(
                 {
@@ -187,7 +208,10 @@ def process_repository(
                 }
             )
 
-    return repo_ts, adoption_date
+    if contributor_stats:
+        contributor_ts.extend(contributor_stats)
+
+    return repo_ts, adoption_date, contributor_ts
 
 
 def main() -> None:
@@ -198,14 +222,12 @@ def main() -> None:
         handlers=[logging.StreamHandler(sys.stdout)],
     )
 
-    # Required for Windows multiprocessing
     multiprocessing.freeze_support()
 
     if not CLONE_DIR.exists():
         logging.error("Clone directory %s does not exist", CLONE_DIR)
         return
 
-    # Read the CSV files
     try:
         repos_df = pd.read_csv(REPOS_CSV)
         cursor_files_df = pd.read_csv(CURSOR_FILES_CSV)
@@ -218,39 +240,42 @@ def main() -> None:
         logging.error("Failed to read CSV files: %s", e)
         return
 
-    # Create mapping of repo_name to cursor files
     repo_cursor_files = defaultdict(list)
     for _, row in cursor_files_df.iterrows():
         repo_cursor_files[row["repo_name"]].append(row["file_path"])
 
-    # Prepare arguments for parallel processing using starmap
     total_repos = len(repos_df)
     args_list = [
         (idx, repo, repo_cursor_files, total_repos) for idx, repo in repos_df.iterrows()
     ]
 
-    # Initialize results containers
     repo_ts = []
+    contributor_ts = []
     adoption_dates = {}
 
-    # Create and start the multiprocessing pool
     logging.info("Starting multiprocessing pool with %d workers", NUM_PROCESSES)
     with multiprocessing.Pool(processes=NUM_PROCESSES) as pool:
         results = pool.starmap(process_repository, args_list)
 
-        for repo_time_series, repo_adoption_date in results:
+        for repo_time_series, repo_adoption_date, repo_contributor_ts in results:
             repo_ts.extend(repo_time_series)
+            contributor_ts.extend(repo_contributor_ts)
             adoption_dates.update(repo_adoption_date)
 
     logging.info("Finished processing %d repos", total_repos)
 
-    # Save time series data
     if repo_ts:
         ts_df = pd.DataFrame(repo_ts)
         ts_df.to_csv(OUTPUT_FILE, index=False)
         logging.info("Saved time series data to %s", OUTPUT_FILE)
 
-    # Update repos CSV with cursor adoption dates
+    if contributor_ts:
+        contributor_df = pd.DataFrame(contributor_ts)
+        contributor_df.to_csv(CONTRIBUTOR_OUTPUT_FILE, index=False)
+        logging.info(
+            "Saved contributor time series data to %s", CONTRIBUTOR_OUTPUT_FILE
+        )
+
     if adoption_dates:
         repos_df["repo_cursor_adoption"] = repos_df["repo_name"].map(adoption_dates)
         repos_df.to_csv(REPOS_CSV, index=False)
