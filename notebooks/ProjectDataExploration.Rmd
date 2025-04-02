@@ -24,16 +24,18 @@ ggplot(allRepos %>% filter(repo_stars >= 10), aes(x = reorder(repo_primary_langu
   geom_bar() +
   theme_minimal() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
-  labs(x = "Primary Language",
-       y = "Number of Projects",
-       title = "Distribution of Primary Languages Across Projects") +
+  labs(
+    x = "Primary Language",
+    y = "Number of Projects",
+    title = "Distribution of Primary Languages Across Projects"
+  ) +
   scale_y_continuous(expand = c(0, 0))
-
 ```
 # Looking at the data, we can see that the vast majority of projects are have a primary language of typescript
 
 ```{r}
-allRepos %>% filter(repo_stars >= 10) %>%
+allRepos %>%
+  filter(repo_stars >= 10) %>%
   group_by(repo_primary_language) %>%
   summarise(numRepos = n()) %>%
   arrange(desc(numRepos)) %>%
@@ -48,4 +50,54 @@ allRepos %>% filter(repo_stars >= 10) %>%
 
 nrow(allRepos)
 table(allRepos$repo_primary_language)
+```
+
+# Examine dataset structure to confirm adoption date fields
+```{r}
+# Convert repo_cursor_adoption to Date type
+allRepos$repo_cursor_adoption <- as.Date(allRepos$repo_cursor_adoption)
+
+ggplot(allRepos, aes(x = repo_cursor_adoption)) +
+  geom_histogram(bins = 30, fill = "steelblue", color = "black") +
+  theme_minimal() +
+  labs(
+    title = "Distribution of Cursor Adoption Dates",
+    x = "Adoption Date",
+    y = "Number of Repositories"
+  )
+
+# Calculate time since adoption in different units
+allRepos$days_since_adoption <- as.numeric(Sys.Date() - allRepos$repo_cursor_adoption)
+allRepos$weeks_since_adoption <- allRepos$days_since_adoption / 7
+allRepos$months_since_adoption <- allRepos$days_since_adoption / 30.44  # Average days per month
+
+# Plot distribution of days since adoption
+ggplot(allRepos, aes(x = days_since_adoption)) +
+  geom_histogram(bins = 30, fill = "steelblue", color = "black") +
+  theme_minimal() +
+  labs(
+    title = "Distribution of Time Since Cursor Adoption",
+    x = "Days Since Adoption",
+    y = "Number of Repositories"
+  )
+
+# Plot distribution of weeks since adoption
+ggplot(allRepos, aes(x = weeks_since_adoption)) +
+  geom_histogram(bins = 30, fill = "darkgreen", color = "black") +
+  theme_minimal() +
+  labs(
+    title = "Distribution of Time Since Cursor Adoption",
+    x = "Weeks Since Adoption",
+    y = "Number of Repositories"
+  )
+
+# Plot distribution of months since adoption
+ggplot(allRepos, aes(x = months_since_adoption)) +
+  geom_histogram(bins = 30, fill = "purple", color = "black") +
+  theme_minimal() +
+  labs(
+    title = "Distribution of Time Since Cursor Adoption",
+    x = "Months Since Adoption",
+    y = "Number of Repositories"
+  )
 ```
