@@ -49,7 +49,7 @@ def get_weekly_commit_stats(
     """
     try:
         repo = git.Repo(str(repo_path))
-        repo_name = repo_path.name
+        repo_name = repo_path.name.replace("_", "/")
 
         weekly_stats = defaultdict(
             lambda: {"commits": 0, "lines_added": 0, "contributors": set()}
@@ -188,6 +188,7 @@ def find_cursor_file_commits(repo_path: Path, cursor_files: List[str]) -> List[D
                 # Get all commits that modified this file
                 for commit in repo.iter_commits(paths=file_path):
                     commit_time = datetime.fromtimestamp(commit.committed_date)
+                    author_date = datetime.fromtimestamp(commit.authored_date)
 
                     commits_data.append(
                         {
@@ -195,14 +196,14 @@ def find_cursor_file_commits(repo_path: Path, cursor_files: List[str]) -> List[D
                             "commit_hash": commit.hexsha,
                             "cursor_file": file_path,
                             "author": f"{commit.author.name} <{commit.author.email}>",
-                            "author_date": commit.author_date,
+                            "authored_at": author_date.isoformat(),
                             "committer": f"{commit.committer.name} <{commit.committer.email}>",
-                            "committed_date": commit_time.isoformat(),
+                            "committed_at": commit_time.isoformat(),
                             "message": commit.message,
                         }
                     )
             except Exception as e:
-                logging.debug(f"Error processing commits for {file_path}: {e}")
+                logging.error(f"Error processing commits for {file_path}: {e}")
                 continue
 
         return commits_data
