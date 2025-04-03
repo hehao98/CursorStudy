@@ -10,6 +10,7 @@ This script:
 
 import logging
 import multiprocessing
+import random
 import sys
 from collections import defaultdict
 from datetime import datetime
@@ -305,6 +306,7 @@ def main() -> None:
     args_list = [
         (idx, repo, repo_cursor_files, total_repos) for idx, repo in repos_df.iterrows()
     ]
+    random.shuffle(args_list)  # Hope to have equal load per process
 
     repo_ts = []
     contributor_ts = []
@@ -313,7 +315,7 @@ def main() -> None:
 
     logging.info("Starting multiprocessing pool with %d workers", NUM_PROCESSES)
     with multiprocessing.Pool(processes=NUM_PROCESSES) as pool:
-        results = pool.starmap(process_repository, args_list)
+        results = pool.starmap(process_repository, args_list, chunksize=1)
 
         for (
             repo_time_series,
