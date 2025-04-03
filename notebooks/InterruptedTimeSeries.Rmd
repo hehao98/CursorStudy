@@ -28,16 +28,17 @@ Neither of them are perfect, but our Interrupted Time Series Analysis (ITS) shou
 We use a pooled Interrupted Time Series Analysis (ITS) model, with project-level mixed effects and time-varying control variables, to estimate the effect of Cursor adoption on productivity.
 
 $$
-y_{it} = \beta_0 + \beta_1 X_{it} + \beta_2 T_{it} + \beta_3 X_{it} T_{ti} + \sum_{j=1}^{n} \gamma_j Z^j_{it} + u_i T_{it} + v_i X_{it} + w_i X_{it} T_{it} + \epsilon_{it}
+y_{it} = \beta_0 + \beta_1 X_{it} + \beta_2 T_{it} + \beta_3 X_{it} T_{ti} + \sum_{j=1}^{n} \gamma_j Z^j_{it} + b_{0i} + \epsilon_{it}
 $$
 
-where $y_{it}$ is the outcome variable, $X_{it}$ is a binary variable indicating whether the user is using Cursor, $T_it$ is a categorical variable indicating the time period, $Z^j_{it}$ are time-varying control variables, $u_i$, $v_i$, and $w_i$ are project-level fixed effects, and $\epsilon_{it}$ is an autocorrelated error term (we assume an $AR(1)$ process for simplicity).
+where $y_{it}$ is the outcome variable, $X_{it}$ is a binary variable indicating whether the user is using Cursor, $T_it$ is a categorical variable indicating the time period, $Z^j_{it}$ are time-varying control variables, $b_{0i}$ are repository-specific baseline deviations, and $\epsilon_{it}$ is an autocorrelated error term (we assume an $AR(1)$ process for simplicity).
 
 ## Libraries
 
 ```{r setup, message=FALSE}
 library(readr)
 library(lme4)
+library(nlme)
 library(ggplot2)
 library(dplyr)
 library(gridExtra)
@@ -53,167 +54,184 @@ its_contributors <- read_csv("../data/its_contributors.csv")
 # Drop the last time period for each repository and contributor
 # This to avoid artifacts caused by incomplete periods
 its_repos <- its_repos %>%
-  group_by(repo_name) %>%
-  mutate(is_last_timestep = time == max(time)) %>%
-  filter(!is_last_timestep) %>%
-  select(-is_last_timestep) %>%
-  ungroup()
+    group_by(repo_name) %>%
+    mutate(is_last_timestep = time == max(time)) %>%
+    filter(!is_last_timestep) %>%
+    select(-is_last_timestep) %>%
+    ungroup()
 its_contributors <- its_contributors %>%
-  group_by(author_name) %>%
-  mutate(is_last_timestep = time == max(time)) %>%
-  filter(!is_last_timestep) %>%
-  select(-is_last_timestep) %>%
-  ungroup()
+    group_by(author_name) %>%
+    mutate(is_last_timestep = time == max(time)) %>%
+    filter(!is_last_timestep) %>%
+    select(-is_last_timestep) %>%
+    ungroup()
 ```
 
 ## Visualization
 
 ```{r, fig.width=15, fig.height=10}
 create_aligned_plot <- function(data, y_var, title, y_label) {
-  # Center time around intervention
-  data <- data %>%
-    # Group by repo_name for repo data, or by both repo_name and author_name for contributor data
-    group_by(if("repo_name" %in% names(.) && !"author_name" %in% names(.))
-             repo_name
-             else
-             across(c(repo_name, author_name))) %>%
-    mutate(
-      # Calculate aligned time (0 = intervention point)
-      aligned_time = time - time[which(intervention == 1)[1]],
-      # Mark pre/post periods
-      period = ifelse(intervention == 0, "Pre-Intervention", "Post-Intervention")
-    ) %>%
-    ungroup() %>%
-    # Limit to time points >= -30
-    filter(aligned_time >= -30 & aligned_time <= 30) %>%
-    # Add a small constant to handle zeros for log scale
-    mutate(!!y_var := pmax(get(y_var), 0.1))
+    # Center time around intervention
+    data <- data %>%
+        # Group by repo_name for repo data, or by both repo_name and author_name for contributor data
+        group_by(if ("repo_name" %in% names(.) && !"author_name" %in% names(.)) {
+            repo_name
+        } else {
+            across(c(repo_name, author_name))
+        }) %>%
+        mutate(
+            # Calculate aligned time (0 = intervention point)
+            aligned_time = time - time[which(intervention == 1)[1]],
+            # Mark pre/post periods
+            period = ifelse(intervention == 0, "Pre-Intervention", "Post-Intervention")
+        ) %>%
+        ungroup() %>%
+        # Limit to time points >= -30
+        filter(aligned_time >= -30 & aligned_time <= 30) %>%
+        # Add a small constant to handle zeros for log scale
+        mutate(!!y_var := pmax(get(y_var), 0.1))
 
-  # Create box plot with log scale
-  p <- ggplot(data, aes(x = factor(aligned_time), y = get(y_var), fill = period)) +
-    geom_boxplot(position = "dodge", width = 0.7, outlier.size = 1) +
-    geom_vline(xintercept = which(sort(unique(data$aligned_time)) == 0) - 0.5,
-               linetype = "dashed", color = "black", linewidth = 1) +
-    scale_y_log10() +
-    # Only show labels for every other time step
-    scale_x_discrete(breaks = function(x) x[seq(1, length(x), by = 2)]) +
-    labs(
-      title = title,
-      x = "Weeks Relative to Intervention (0 = Cursor Adoption)",
-      y = paste(y_label, "(log scale)"),
-      fill = "Period"
-    ) +
-    theme_minimal(base_size = 14) +
-    theme(
-      legend.position = "bottom",
-      legend.text = element_text(size = 12),
-      legend.title = element_text(size = 14),
-      plot.title = element_text(size = 16, face = "bold"),
-      axis.title = element_text(size = 14),
-      axis.text = element_text(size = 12)
-    ) +
-    scale_fill_manual(values = c("Pre-Intervention" = "steelblue", "Post-Intervention" = "firebrick"))
+    # Create box plot with log scale
+    p <- ggplot(data, aes(x = factor(aligned_time), y = get(y_var), fill = period)) +
+        geom_boxplot(position = "dodge", width = 0.7, outlier.size = 1) +
+        geom_vline(
+            xintercept = which(sort(unique(data$aligned_time)) == 0) - 0.5,
+            linetype = "dashed", color = "black", linewidth = 1
+        ) +
+        scale_y_log10() +
+        # Only show labels for every other time step
+        scale_x_discrete(breaks = function(x) x[seq(1, length(x), by = 2)]) +
+        labs(
+            title = title,
+            x = "Weeks Relative to Intervention (0 = Cursor Adoption)",
+            y = paste(y_label, "(log scale)"),
+            fill = "Period"
+        ) +
+        theme_minimal(base_size = 14) +
+        theme(
+            legend.position = "bottom",
+            legend.text = element_text(size = 12),
+            legend.title = element_text(size = 14),
+            plot.title = element_text(size = 16, face = "bold"),
+            axis.title = element_text(size = 14),
+            axis.text = element_text(size = 12)
+        ) +
+        scale_fill_manual(values = c("Pre-Intervention" = "steelblue", "Post-Intervention" = "firebrick"))
 
-  return(p)
+    return(p)
 }
 
 # Repository-level visualizations
 commits_repo_plot <- create_aligned_plot(
-  its_repos,
-  "commits",
-  "Effect of Cursor Adoption on Repository Commits",
-  "Number of Commits"
+    its_repos,
+    "commits",
+    "Effect of Cursor Adoption on Repository Commits",
+    "Number of Commits"
 )
 
 lines_repo_plot <- create_aligned_plot(
-  its_repos,
-  "lines_added",
-  "Effect of Cursor Adoption on Repository Lines Added",
-  "Lines Added"
+    its_repos,
+    "lines_added",
+    "Effect of Cursor Adoption on Repository Lines Added",
+    "Lines Added"
 )
 
 # Contributor-level visualizations
 commits_contrib_plot <- create_aligned_plot(
-  its_contributors,
-  "commits",
-  "Effect of Cursor Adoption on Contributor Commits",
-  "Number of Commits"
+    its_contributors,
+    "commits",
+    "Effect of Cursor Adoption on Contributor Commits",
+    "Number of Commits"
 )
 
 lines_contrib_plot <- create_aligned_plot(
-  its_contributors,
-  "lines_added",
-  "Effect of Cursor Adoption on Contributor Lines Added",
-  "Lines Added"
+    its_contributors,
+    "lines_added",
+    "Effect of Cursor Adoption on Contributor Lines Added",
+    "Lines Added"
 )
 
 # Display plots in a grid
 grid.arrange(
-  commits_repo_plot, lines_repo_plot,
-  commits_contrib_plot, lines_contrib_plot,
-  ncol = 2
+    commits_repo_plot, lines_repo_plot,
+    commits_contrib_plot, lines_contrib_plot,
+    ncol = 2
 )
 ```
 
 ## Model Estimation
 
 ```{r}
-model_commits_repo <- lm(
-    log(commits + 1) ~ time + intervention + time_after_intervention + log(contributors + 1),
-    #random = ~ time + intervention + time_after_intervention | repo_name,
-    #correlation = corAR1(form = ~ time | repo_name),
+model_commits_repo <- lme(
+    fixed = log(commits + 1) ~ time + intervention + time_after_intervention + log(contributors + 1),
+    random = ~ 1 | repo_name,
+    correlation = corAR1(form = ~ time | repo_name),
     data = its_repos
 )
 
-model_commits_contributor <- lm(
-    log(commits + 1) ~ time + intervention + time_after_intervention,
-    #random = ~ time + intervention + time_after_intervention | author_name,
-    #correlation = corAR1(form = ~ time | author_name),
+# Create a unique ID for each author-repository combination
+its_contributors <- its_contributors %>%
+    mutate(author_repo_id = paste(author_name, repo_name, sep = "_"))
+
+model_commits_contributor <- lme(
+    fixed = log(commits + 1) ~ time + intervention + time_after_intervention,
+    random = ~ 1 | author_repo_id,
+    correlation = corAR1(form = ~ time | author_repo_id),
     data = its_contributors
 )
 
-model_lines_repo <- lm(
-    log(lines_added + 1) ~ time + intervention + time_after_intervention + log(contributors + 1),
-    #random = ~ time + intervention + time_after_intervention | repo_name,
-    #correlation = corAR1(form = ~ time | repo_name),
+model_lines_repo <- lme(
+    fixed = log(lines_added + 1) ~ time + intervention + time_after_intervention + log(contributors + 1),
+    random = ~ 1 | repo_name,
+    correlation = corAR1(form = ~ time | repo_name),
     data = its_repos
 )
 
-model_lines_contributor <- lm(
-    log(lines_added + 1) ~ time + intervention + time_after_intervention,
-    #random = ~ time + intervention + time_after_intervention | author_name,
-    #correlation = corAR1(form = ~ time | author_name),
+model_lines_contributor <- lme(
+    fixed = log(lines_added + 1) ~ time + intervention + time_after_intervention,
+    random = ~ 1 | author_repo_id,
+    correlation = corAR1(form = ~ time | author_repo_id),
     data = its_contributors
 )
 
 # Create a list of models
 models_list <- list(
-  "Commits (Repo)" = model_commits_repo,
-  "Lines (Repo)" = model_lines_repo,
-  "Commits (Contributor)" = model_commits_contributor,
-  "Lines (Contributor)" = model_lines_contributor
+    "Commits (Repo)" = model_commits_repo,
+    "Lines (Repo)" = model_lines_repo,
+    "Commits (Contributor)" = model_commits_contributor,
+    "Lines (Contributor)" = model_lines_contributor
 )
 
 # Create coefficient map with better labels
 cm <- c(
-  "time" = "Time",
-  "intervention" = "Intervention",
-  "time_after_intervention" = "Time After Intervention",
-  "contributors" = "Contributors"
+    "time" = "Time",
+    "intervention" = "Intervention",
+    "time_after_intervention" = "Time After Intervention",
+    "log(contributors + 1)" = "Contributors"
 )
 
 # Generate model summary table using modelsummary
 modelsummary(
-  models_list,
-  title = "All Interrupted Time Series Models",
-  stars = TRUE,
-  gof_map = c("nobs", "r.squared", "adj.r.squared"),
-  coef_map = cm,
-  output = "html"
+    models_list,
+    title = "All Interrupted Time Series Models",
+    stars = TRUE,
+    gof_map = c("nobs", "r.squared", "adj.r.squared"),
+    coef_map = cm,
+    output = "html"
 )
 ```
 
 ## Robustness Checks
+
+DeepSeek suggested robustness checks, actual implementation TODO:
+
+| Aspect                  | Tool/Method                          | Red Flag Resolution               |
+|-------------------------|--------------------------------------|------------------------------------|
+| Random effects validity | LRT, `ranef()`                       | Simplify random effects           |
+| AR(1) adequacy          | ACF/PACF plots                      | Use `corCAR1` or higher-order AR  |
+| Intervention timing     | Grouped `summarise()`               | Exclude poorly represented projects|
+| Linearity               | LOESS smooth plots                  | Add non-linear terms              |
+| Convergence             | `intervals()`, model warnings       | Reduce model complexity           |
 
 ```{r}
 
