@@ -28,6 +28,7 @@ CLONE_DIR = Path(__file__).parent.parent.parent / "CursorRepos"
 OUTPUT_FILE = Path(__file__).parent.parent / "data" / "ts_repos.csv"
 CONTRIBUTOR_OUTPUT_FILE = Path(__file__).parent.parent / "data" / "ts_contributors.csv"
 NUM_PROCESSES = multiprocessing.cpu_count() // 2
+REPO_TIMEOUT_SECONDS = 7200  # 2 hours timeout per repository
 
 
 def get_weekly_commit_stats(
@@ -315,18 +316,33 @@ def main() -> None:
 
     logging.info("Starting multiprocessing pool with %d workers", NUM_PROCESSES)
     with multiprocessing.Pool(processes=NUM_PROCESSES) as pool:
-        results = pool.starmap(process_repository, args_list, chunksize=1)
+        # Create async results
+        async_results = []
+        for args in args_list:
+            async_results.append(pool.apply_async(process_repository, args))
 
-        for (
-            repo_time_series,
-            repo_adoption_date,
-            repo_contributor_ts,
-            repo_cursor_commits,
-        ) in results:
-            repo_ts.extend(repo_time_series)
-            contributor_ts.extend(repo_contributor_ts)
-            cursor_commits.extend(repo_cursor_commits)
-            adoption_dates.update(repo_adoption_date)
+        # Process results with timeout
+        for idx, async_result in enumerate(async_results):
+            repo_name = args_list[idx][1]["repo_name"]
+            try:
+                (
+                    repo_time_series,
+                    repo_adoption_date,
+                    repo_contributor_ts,
+                    repo_cursor_commits,
+                ) = async_result.get(timeout=REPO_TIMEOUT_SECONDS)
+                repo_ts.extend(repo_time_series)
+                contributor_ts.extend(repo_contributor_ts)
+                cursor_commits.extend(repo_cursor_commits)
+                adoption_dates.update(repo_adoption_date)
+            except multiprocessing.TimeoutError:
+                logging.error(
+                    "Repository %s processing timed out after %d seconds",
+                    repo_name,
+                    REPO_TIMEOUT_SECONDS,
+                )
+            except Exception as e:
+                logging.error("Error processing repository %s: %s", repo_name, str(e))
 
     logging.info("Finished processing %d repos", total_repos)
 
