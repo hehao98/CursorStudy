@@ -1,0 +1,81 @@
+---
+title: "PanelRegression"
+author: "C. Miller"
+date: "2025-04-03"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(ggplot2)
+library(tidyverse)
+library(fixest)
+
+its_repos <- read_csv("../data/its_repos.csv")
+
+
+# importing dataset with data for all repos (no qualitfying filter)
+allRepos <- read_csv("../data/repos.csv")
+
+# creating datetime object with current date 
+current_date <- as_datetime("2025-04-03 09:00:00")
+
+# casting date cols to date format
+allRepos$repo_cursor_adoption <- as_datetime(allRepos$repo_cursor_adoption)
+allRepos$repo_created <- as_datetime(allRepos$repo_created)
+allRepos$repo_updated <- as_datetime(allRepos$repo_updated)
+
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Data setup 
+
+Calculating elapsed time since cursor adoption for each repo
+```{r}
+# creating col calculating how long each project has been using cursor for (how much time has elapsed since adoption)
+allRepos <- allRepos %>% mutate(elapsedDaysSinceCursorAdoption = as.numeric(current_date - allRepos$repo_cursor_adoption, units = "days"))
+
+# creating col calculating how long the project existed before adopting cursor (time delta b/w repo creation and cursor adoption date)
+allRepos <- allRepos %>% mutate(elapsedDaysBeforeCursorAdoption = as.numeric(allRepos$repo_cursor_adoption - allRepos$repo_created, units = "days"))
+```
+
+
+Pulling subset of repos that (1) have at least 6 months of cursor usage; and (2) have a primary language of either typescript, javascript, or python
+```{r}
+qualityingRepos <- allRepos %>% filter(repo_stars >= 10 & elapsedDaysSinceCursorAdoption >= 180 & repo_primary_language %in% c("JavaScript","TypeScript","Python"))
+
+its_qualifyingRepos <- its_repos %>% filter(repo_name %in% qualityingRepos$repo_name)
+its_repos %>% filter(repo_name %in% qualityingRepos$repo_name)
+
+
+its_qualifyingRepos %>% group_by(repo_name) %>% summarize(n())
+
+qualityingRepos %>% filter(! repo_name %in% its_qualifyingRepos$repo_name)
+
+
+```
+
+
+```{r}
+# creating balanced event_time metric 
+
+
+# Step 1: Find the intervention week number (from `time`) for each repo
+intervention_weeks <- its_qualifyingRepos %>%
+  filter(intervention == 1) %>%
+  group_by(repo_name) %>%
+  summarize(intervention_week = min(time))
+
+# Step 2: Join that back into your main dataset
+its_qualifyingRepos <- its_qualifyingRepos %>%
+  left_join(intervention_weeks, by = "repo_name") %>%
+  mutate(event_time = time - intervention_week)
+
+
+```
+
+
+
+
+
+
+
