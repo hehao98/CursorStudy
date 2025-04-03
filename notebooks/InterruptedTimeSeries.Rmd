@@ -99,7 +99,7 @@ create_aligned_plot <- function(data, y_var, title, y_label) {
     scale_x_discrete(breaks = function(x) x[seq(1, length(x), by = 2)]) +
     labs(
       title = title,
-      x = "Time relative to intervention (0 = Cursor adoption)",
+      x = "Weeks Relative to Intervention (0 = Cursor Adoption)",
       y = paste(y_label, "(log scale)"),
       fill = "Period"
     ) +
