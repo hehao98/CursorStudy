@@ -77,7 +77,11 @@ def get_weekly_commit_stats(
                     added_lines = 0
                     for diff_item in diff:
                         if hasattr(diff_item, "diff"):
-                            diff_text = diff_item.diff.decode("utf-8", errors="replace")
+                            diff_data = diff_item.diff
+                            if isinstance(diff_data, bytes):
+                                diff_text = diff_data.decode("utf-8", errors="replace")
+                            else:
+                                diff_text = str(diff_data)
                             # Count additions (lines starting with '+' but not '+++')
                             added_lines += sum(
                                 1
