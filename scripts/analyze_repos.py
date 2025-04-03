@@ -11,6 +11,7 @@ This script:
 import logging
 import multiprocessing
 import random
+import subprocess
 import sys
 from collections import defaultdict
 from datetime import datetime
@@ -73,21 +74,39 @@ def get_weekly_commit_stats(
             try:
                 if commit.parents:
                     parent = commit.parents[0]
-                    diff = parent.diff(commit)
                     added_lines = 0
-                    for diff_item in diff:
-                        if hasattr(diff_item, "diff"):
-                            diff_data = diff_item.diff
-                            if isinstance(diff_data, bytes):
-                                diff_text = diff_data.decode("utf-8", errors="replace")
-                            else:
-                                diff_text = str(diff_data)
-                            # Count additions (lines starting with '+' but not '+++')
-                            added_lines += sum(
-                                1
-                                for line in diff_text.splitlines()
-                                if line.startswith("+") and not line.startswith("+++")
-                            )
+
+                    # Use git CLI to get lines added as GitPython is not working
+                    try:
+                        cmd = [
+                            "git",
+                            "-C",
+                            str(repo_path),
+                            "diff",
+                            "--numstat",
+                            f"{parent.hexsha}..{commit.hexsha}",
+                        ]
+                        result = subprocess.run(
+                            cmd, capture_output=True, text=True, check=True
+                        )
+
+                        # Parse the numstat output: each line has format "added deleted filename"
+                        if result.stdout.strip():
+                            for line in result.stdout.strip().split("\n"):
+                                if line.strip():
+                                    parts = line.split()
+                                    if (
+                                        len(parts) >= 2 and parts[0] != "-"
+                                    ):  # Skip binary files (marked with -)
+                                        try:
+                                            added_lines += int(parts[0])
+                                        except ValueError:
+                                            pass  # Skip if conversion fails
+
+                        logging.debug("%s: +%d lines", commit.hexsha[:8], added_lines)
+                    except subprocess.SubprocessError as e:
+                        logging.error("Diff failed for commit %s: %s", commit.hexsha, e)
+                        continue
 
                     weekly_stats[week_key]["lines_added"] += added_lines
                     contributor_weekly_stats[week_key][author_str][
