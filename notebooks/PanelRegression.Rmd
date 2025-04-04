@@ -12,6 +12,7 @@ library(fixest)
 
 its_repos <- read_csv("../data/its_repos.csv")
 
+ts_repos <- read_csv("../data/ts_repos.csv")
 
 # importing dataset with data for all repos (no qualitfying filter)
 allRepos <- read_csv("../data/repos.csv")
@@ -43,21 +44,20 @@ Pulling subset of repos that (1) have at least 6 months of cursor usage; and (2)
 ```{r}
 qualityingRepos <- allRepos %>% filter(repo_stars >= 10 & elapsedDaysSinceCursorAdoption >= 180 & repo_primary_language %in% c("JavaScript","TypeScript","Python"))
 
+# pulling its data for repos that potentially qualify (still need to check that they have at least 6 months history before cursor adoption)
 its_qualifyingRepos <- its_repos %>% filter(repo_name %in% qualityingRepos$repo_name)
-its_repos %>% filter(repo_name %in% qualityingRepos$repo_name)
-
 
 its_qualifyingRepos %>% group_by(repo_name) %>% summarize(n())
 
+# checking to see how many qualifying repos don't have data in its_dataframe
 qualityingRepos %>% filter(! repo_name %in% its_qualifyingRepos$repo_name)
-
+# it looks like now there's only 2 not in the its data TODO look into this and figure out why they didn't make it
 
 ```
 
 
 ```{r}
 # creating balanced event_time metric 
-
 
 # Step 1: Find the intervention week number (from `time`) for each repo
 intervention_weeks <- its_qualifyingRepos %>%
@@ -70,9 +70,55 @@ its_qualifyingRepos <- its_qualifyingRepos %>%
   left_join(intervention_weeks, by = "repo_name") %>%
   mutate(event_time = time - intervention_week)
 
-
 ```
 
+
+Identifying final subset that qualifies for modeling with at least 4 months before and after cursor adoption, pulling only the weeks -17 to 17 for each repo to create balanced dataset for modeling
+```{r}
+# identifying the subset of projects that have at least 4 months (~17 weeks) of history before and after cursor adoption 
+
+# First identify repos that have the full range of -17 to -17 weeks
+complete_repos <- its_qualifyingRepos %>%
+  group_by(repo_name) %>%
+  summarize(
+    has_full_range = all(seq(-17, 17) %in% event_time),
+    n_weeks = n()
+  ) %>%
+  filter(has_full_range == TRUE)
+
+# Create dataset with only -17 to 17 weeks for qualifying repos
+pr_qualifyingRepos <- its_qualifyingRepos %>%
+  filter(
+    repo_name %in% complete_repos$repo_name,
+    event_time >= -17,
+    event_time <= 17
+  )
+
+# Verify each repo has exactly 35 weeks
+timebox_check <- timebox %>%
+  group_by(repo_name) %>%
+  summarize(n_weeks = n())
+
+print("Number of repos in timeboxed dataset:")
+print(nrow(timebox_check))
+print("\nVerifying each repo has 35 weeks:")
+print(all(timebox_check$n_weeks == 35))
+
+
+
+## how many repos have at least 4 months (~17 weeks) of data before and after adoption?
+
+# Find earliest event_time for each repo
+earliest_event_times <- its_qualifyingRepos %>%
+  group_by(repo_name) %>%
+  summarize(earliest_event_time = min(event_time), latest_event_time = max(event_time))
+
+# pulling qualifying subset
+earliest_event_times %>% filter(earliest_event_time <= -17 & latest_event_time >= 17)
+
+its_qualifyingRepos %>% filter(repo_name=="labnol/react-tailwind")
+qualityingRepos %>% filter(repo_name=="labnol/react-tailwind")
+```
 
 
 
