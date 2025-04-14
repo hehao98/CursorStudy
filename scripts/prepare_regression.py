@@ -91,7 +91,7 @@ def process_time_series(
     time_series_data: pd.DataFrame,
     entity_id: Dict[str, str],
     adoption_week: str,
-    min_weeks_before_adoption: int,
+    #min_weeks_before_adoption: int,
     entity_type: str = "repository",
 ) -> List[Dict[str, Any]]:
     """
@@ -141,11 +141,11 @@ def process_time_series(
         )
 
     # Need at least min_weeks_before_adoption weeks before adoption
-    if adoption_idx < min_weeks_before_adoption:
-        logging.debug(
-            f"Skipping {entity_name}: Not enough history before adoption ({adoption_idx} weeks)"
-        )
-        return []
+    #if adoption_idx < min_weeks_before_adoption:
+     #   logging.debug(
+     #       f"Skipping {entity_name}: Not enough history before adoption ({adoption_idx} weeks)"
+     #   )
+     #   return []
 
     logging.debug(f"Processing {entity_name}: Found adoption at week {adoption_week}")
     results = []
@@ -317,7 +317,7 @@ def prepare_repo_its_dataset(weekly_ts_df: pd.DataFrame) -> pd.DataFrame:
             time_series_data=repo_data,
             entity_id={"repo_name": repo_name},
             adoption_week=adoption_week,
-            min_weeks_before_adoption=REPO_MIN_WEEKS_BEFORE_ADOPTION,
+            #min_weeks_before_adoption=REPO_MIN_WEEKS_BEFORE_ADOPTION,
             entity_type="repository",
         )
 
@@ -364,7 +364,7 @@ def prepare_contributor_its_dataset(contributor_ts_df: pd.DataFrame) -> pd.DataF
             time_series_data=contributor_data,
             entity_id={"repo_name": repo_name, "author_name": author_name},
             adoption_week=adoption_week,
-            min_weeks_before_adoption=CONTRIBUTOR_MIN_WEEKS_BEFORE_ADOPTION,
+            #min_weeks_before_adoption=CONTRIBUTOR_MIN_WEEKS_BEFORE_ADOPTION,
             entity_type="contributor",
         )
 

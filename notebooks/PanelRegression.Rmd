@@ -1,0 +1,239 @@
+---
+title: "PanelRegression"
+author: "C. Miller"
+date: "2025-04-03"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(ggplot2)
+library(tidyverse)
+library(fixest)
+
+its_repos <- read_csv("../data/its_repos.csv")
+
+ts_repos <- read_csv("../data/ts_repos.csv")
+
+# importing dataset with data for all repos (no qualitfying filter)
+allRepos <- read_csv("../data/repos.csv")
+
+# creating datetime object with current date 
+current_date <- as_datetime("2025-04-03 09:00:00")
+
+# casting date cols to date format
+allRepos$repo_cursor_adoption <- as_datetime(allRepos$repo_cursor_adoption)
+allRepos$repo_created <- as_datetime(allRepos$repo_created)
+allRepos$repo_updated <- as_datetime(allRepos$repo_updated)
+
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Data setup 
+
+Calculating elapsed time since cursor adoption for each repo
+```{r}
+# creating col calculating how long each project has been using cursor for (how much time has elapsed since adoption)
+allRepos <- allRepos %>% mutate(elapsedDaysSinceCursorAdoption = as.numeric(current_date - allRepos$repo_cursor_adoption, units = "days"))
+
+# creating col calculating how long the project existed before adopting cursor (time delta b/w repo creation and cursor adoption date)
+allRepos <- allRepos %>% mutate(elapsedDaysBeforeCursorAdoption = as.numeric(allRepos$repo_cursor_adoption - allRepos$repo_created, units = "days"))
+```
+
+
+Pulling subset of repos that (1) have at least 6 months of cursor usage; and (2) have a primary language of either typescript, javascript, or python
+```{r}
+qualityingRepos <- allRepos %>% filter(repo_stars >= 10 & elapsedDaysSinceCursorAdoption >= 180 & repo_primary_language %in% c("JavaScript","TypeScript","Python"))
+
+# pulling its data for repos that potentially qualify (still need to check that they have at least 6 months history before cursor adoption)
+its_qualifyingRepos <- its_repos %>% filter(repo_name %in% qualityingRepos$repo_name)
+
+its_qualifyingRepos %>% group_by(repo_name) %>% summarize(n())
+
+# checking to see how many qualifying repos don't have data in its_dataframe
+qualityingRepos %>% filter(! repo_name %in% its_qualifyingRepos$repo_name)
+# it looks like now there's only 2 not in the its data TODO look into this and figure out why they didn't make it
+
+```
+
+
+```{r}
+# creating balanced event_time metric 
+
+# Step 1: Find the intervention week number (from `time`) for each repo
+intervention_weeks <- its_qualifyingRepos %>%
+  filter(intervention == 1) %>%
+  group_by(repo_name) %>%
+  summarize(intervention_week = min(time))
+
+# Step 2: Join that back into your main dataset
+its_qualifyingRepos <- its_qualifyingRepos %>%
+  left_join(intervention_weeks, by = "repo_name") %>%
+  mutate(event_time = time - intervention_week)
+
+```
+
+
+Identifying final subset that qualifies for modeling with at least 4 months before and after cursor adoption, pulling only the weeks -17 to 17 for each repo to create balanced dataset for modeling
+```{r}
+# identifying the subset of projects that have at least 4 months (~17 weeks) of history before and after cursor adoption 
+
+# First identify repos that have the full range of -17 to -17 weeks
+complete_repos <- its_qualifyingRepos %>%
+  group_by(repo_name) %>%
+  summarize(
+    has_full_range = all(seq(-17, 17) %in% event_time),
+    n_weeks = n()
+  ) %>%
+  filter(has_full_range == TRUE)
+
+# Create dataset with only -17 to 17 weeks for qualifying repos
+pr_qualifyingRepos <- its_qualifyingRepos %>%
+  filter(
+    repo_name %in% complete_repos$repo_name,
+    event_time >= -17,
+    event_time <= 17
+  )
+
+# Verify each repo has exactly 35 weeks
+timebox_check <- pr_qualifyingRepos %>%
+  group_by(repo_name) %>%
+  summarize(n_weeks = n())
+
+print("Number of repos in timeboxed dataset:")
+print(nrow(timebox_check))
+print("\nVerifying each repo has 35 weeks:")
+print(all(timebox_check$n_weeks == 35))
+
+
+
+## how many repos have at least 4 months (~17 weeks) of data before and after adoption?
+
+# Find earliest event_time for each repo
+earliest_event_times <- its_qualifyingRepos %>%
+  group_by(repo_name) %>%
+  summarize(earliest_event_time = min(event_time), latest_event_time = max(event_time))
+
+# pulling qualifying subset
+earliest_event_times %>% filter(earliest_event_time <= -17 & latest_event_time >= 17)
+
+its_qualifyingRepos %>% filter(repo_name=="labnol/react-tailwind")
+qualityingRepos %>% filter(repo_name=="labnol/react-tailwind")
+```
+
+
+Casting event_time variable and selecting subset of variables necessary for modeling 
+```{r}
+pr_repos <- pr_qualifyingRepos %>%
+  mutate(event_time_factor = factor(event_time)) %>%
+  mutate(event_time_factor = relevel(event_time_factor, ref = "-1")) %>% select(repo_name, event_time_factor, week, intervention, commits, lines_added, contributors)
+```
+
+
+# modeling
+
+# panel regression for single variables
+
+```{r}
+# Run the event study model with repo fixed effects: outcome variable lines_added
+# repo_name controls for repo fixed effects
+model <- feols(
+  lines_added ~ i(event_time_factor, ref = "-1") + commits + contributors | repo_name,
+  data = pr_repos,
+  cluster = ~repo_name
+)
+
+# visualizing effects
+
+event_study_df <- broom::tidy(model) |> 
+  dplyr::filter(grepl("event_time::", term))
+
+ggplot(event_study_df, aes(x = as.numeric(gsub("event_time::", "", term)), y = estimate)) +
+  geom_line() +
+  geom_point() +
+  geom_errorbar(aes(ymin = estimate - 1.96*std.error, ymax = estimate + 1.96*std.error), width = 0.2) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "red") +
+  geom_hline(yintercept = 0, linetype = "dotted") +
+  labs(
+    title = "Event Study: Effect of Tool Adoption Over Time",
+    x = "Weeks Since Intervention",
+    y = "Effect on Outcome (relative to week -1)"
+  ) +
+  theme_minimal()
+
+```
+
+
+# panel regression looking at impact of multiple outcome variables 
+
+```{r}
+# Outcome variables (code quality metrics)
+metrics <- c("commits", "lines_added", "contributors")
+
+# Store models
+models <- list()
+
+# Loop through each metric and build appropriate formula
+for (metric in metrics) {
+  
+  # Include 'contributors' as a control only if it's not the outcome
+  controls <- if (metric != "contributors") "contributors" else NULL
+  
+  # Build formula string
+  rhs <- paste(
+    c("i(event_time_factor, ref = '-1')", controls),
+    collapse = " + "
+  )
+  
+  formula_str <- paste0(metric, " ~ ", rhs, " | repo_name + week")
+  
+  # Estimate model
+  model <- feols(as.formula(formula_str), data = pr_repos, cluster = ~repo_name)
+  models[[metric]] <- model
+}
+
+
+
+```
+
+```{r}
+library(broom)
+
+
+plot_event_study <- function(model, title) {
+  broom::tidy(model) %>%
+    filter(grepl("event_time_factor::", term)) %>%
+    mutate(
+      week = as.numeric(gsub("event_time_factor::", "", term))
+    ) %>%
+    ggplot(aes(x = week, y = estimate)) +
+    geom_line() +
+    geom_point() +
+    geom_errorbar(
+      aes(ymin = estimate - 1.96 * std.error, ymax = estimate + 1.96 * std.error),
+      width = 0.3
+    ) +
+    geom_vline(xintercept = 0, linetype = "dashed", color = "red") +
+    geom_hline(yintercept = 0, linetype = "dotted") +
+    labs(
+      title = title,
+      x = "Weeks Since Intervention",
+      y = "Estimated Effect (vs. Week -1)"
+    ) +
+    theme_minimal()
+}
+
+
+plot_event_study(models$commits, "Effect of Intervention on Commits")
+plot_event_study(models$lines_added, "Effect of Intervention on Lines Added")
+plot_event_study(models$contributors, "Effect of Intervention on Contributors")
+
+library(patchwork)  # if you want side-by-side plots
+
+(plot_event_study(models$commits, "Commits") +
+ plot_event_study(models$lines_added, "Lines Added") +
+ plot_event_study(models$contributors, "Contributors")) +
+ plot_layout(ncol = 1)
+
+
+```
+
