@@ -53,7 +53,13 @@ def get_weekly_commit_stats(
         repo_name = repo_path.name.replace("_", "/")
 
         weekly_stats = defaultdict(
-            lambda: {"commits": 0, "lines_added": 0, "contributors": set()}
+            lambda: {
+                "commits": 0,
+                "lines_added": 0,
+                "contributors": set(),
+                "latest_commit": None,
+                "latest_commit_time": None,
+            }
         )
 
         contributor_stats = []
@@ -69,6 +75,15 @@ def get_weekly_commit_stats(
 
             weekly_stats[week_key]["commits"] += 1
             weekly_stats[week_key]["contributors"].add(author_str)
+
+            # Update latest commit if this is the first one seen this week or has a later timestamp
+            if (
+                weekly_stats[week_key]["latest_commit_time"] is None
+                or commit_time > weekly_stats[week_key]["latest_commit_time"]
+            ):
+                weekly_stats[week_key]["latest_commit"] = commit.hexsha
+                weekly_stats[week_key]["latest_commit_time"] = commit_time
+
             contributor_weekly_stats[week_key][author_str]["commits"] += 1
 
             try:
@@ -119,6 +134,7 @@ def get_weekly_commit_stats(
         result = {}
         for week, stats in weekly_stats.items():
             result[week] = {
+                "latest_commit": stats["latest_commit"],
                 "commits": stats["commits"],
                 "lines_added": stats["lines_added"],
                 "contributors": len(stats["contributors"]),
