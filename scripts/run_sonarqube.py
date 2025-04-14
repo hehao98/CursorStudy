@@ -21,12 +21,12 @@ import requests
 from dotenv import load_dotenv
 
 # Load environment variables
-load_dotenv()
+load_dotenv(override=True)
 
 # Constants
-SONAR_PATH = os.getenv("SONAR_PATH")
+SONAR_PATH = os.getenv("SONAR_SCANNER_PATH")
 SONAR_TOKEN = os.getenv("SONAR_TOKEN")
-SONAR_HOST = "http://localhost:9000"
+SONAR_HOST = os.getenv("SONAR_HOST")
 
 # Metrics to collect from SonarQube
 METRICS_OF_INTEREST = [
@@ -44,6 +44,8 @@ SCRIPT_DIR = Path(__file__).parent
 DATA_DIR = SCRIPT_DIR.parent / "data"
 CLONE_DIR = SCRIPT_DIR.parent.parent / "CursorRepos"
 TS_REPOS_CSV = DATA_DIR / "ts_repos.csv"
+REPOS_CSV = DATA_DIR / "repos.csv"  # Add path for repos data
+WEEKS_INTERVAL = 30  # It may be too costly to analyze all weeks
 
 
 def check_analysis_exists(project_key: str, version: str) -> bool:
@@ -120,7 +122,11 @@ def run_sonar_scan(
         # Checkout the specific commit
         repo = git.Repo(str(repo_path))
         current = repo.head.commit
-        repo.git.checkout(commit_hash)
+
+        # Force checkout and clean the working directory
+        repo.git.reset("--hard")
+        repo.git.clean("-fd")
+        repo.git.checkout(commit_hash, force=True)
 
         try:
             # Run sonar-scanner
@@ -197,8 +203,12 @@ def main() -> None:
         logging.error("SONAR_PATH and SONAR_TOKEN must be set in .env file")
         return
 
-    # Read repository time series data
+    # Read repository time series data and adoption data
     ts_df = pd.read_csv(TS_REPOS_CSV)
+    repos_df = pd.read_csv(REPOS_CSV)
+
+    # Convert cursor_adoption_week to datetime
+    repos_df["repo_cursor_adoption"] = pd.to_datetime(repos_df["repo_cursor_adoption"])
 
     # Create columns for metrics if they don't exist
     for col in METRICS_OF_INTEREST:
@@ -207,16 +217,32 @@ def main() -> None:
 
     # Group by repository name to process each repo's commits
     for repo_name, repo_group in ts_df.groupby("repo_name"):
+        project_key = repo_name.replace("/", "_")
         repo_path = CLONE_DIR / repo_name.replace("/", "_")
         if not repo_path.exists():
             logging.warning("Repository %s not found at %s", repo_name, repo_path)
             continue
 
-        # Sort weeks chronologically to ensure analysis runs from early to late weeks
-        weeks_sorted = sorted(repo_group["week"].unique())
+        # Get adoption week from repos data
+        repo_info = repos_df[repos_df["repo_name"] == repo_name]
+        if repo_info.empty or pd.isna(repo_info["repo_cursor_adoption"].iloc[0]):
+            logging.warning("No adoption found for %s, skipping", repo_name)
+            continue
+
+        adoption = repo_info["repo_cursor_adoption"].iloc[0]
+        start_week = (adoption - pd.Timedelta(weeks=WEEKS_INTERVAL)).strftime("%Y-W%W")
+        end_week = (adoption + pd.Timedelta(weeks=WEEKS_INTERVAL)).strftime("%Y-W%W")
+        logging.info("Processing %s from %s to %s", repo_name, start_week, end_week)
+
+        # Filter weeks before and after adoption
+        weeks_in_range = sorted(
+            repo_group[
+                (repo_group["week"] >= start_week) & (repo_group["week"] <= end_week)
+            ]["week"].unique()
+        )
 
         # Process each week's latest commit in chronological order
-        for week in weeks_sorted:
+        for week in weeks_in_range:
             # Get the index in the original dataframe
             row_idx = ts_df[
                 (ts_df["repo_name"] == repo_name) & (ts_df["week"] == week)
@@ -227,16 +253,15 @@ def main() -> None:
                 logging.warning("No commit hash for %s at %s", repo_name, week)
                 continue
 
-            if not check_analysis_exists(repo_name, week):
-                logging.info(
-                    "Processing %s at %s (%s)", repo_name, week, commit_hash[:8]
-                )
-                run_sonar_scan(repo_path, commit_hash, week, repo_name)
+            if not check_analysis_exists(project_key, week):
+                logging.info("%s at %s (%s)", repo_name, week, commit_hash[:8])
+                run_sonar_scan(repo_path, commit_hash, week, project_key)
 
-            metrics = get_sonar_metrics(repo_name)
+            metrics = get_sonar_metrics(project_key)
             if metrics:
                 for metric, value in metrics.items():
                     ts_df.loc[row_idx, metric] = value
+            logging.info("Metrics for %s at %s: %s", repo_name, week, metrics)
 
     # Rename to technical_debt
     ts_df.rename(
