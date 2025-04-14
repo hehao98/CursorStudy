@@ -294,7 +294,7 @@ def main() -> None:
         },
         inplace=True,
     )
-    updated_df.to_csv(TS_REPOS_CSV, index=False)
+    updated_df.sort_values(by=["repo_name", "week"]).to_csv(TS_REPOS_CSV, index=False)
     logging.info("Updated metrics saved to %s", TS_REPOS_CSV)
 
 
