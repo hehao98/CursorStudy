@@ -9,6 +9,7 @@ This script:
 """
 
 import logging
+import multiprocessing as mp
 import os
 import subprocess
 import sys
@@ -46,6 +47,7 @@ CLONE_DIR = SCRIPT_DIR.parent.parent / "CursorRepos"
 TS_REPOS_CSV = DATA_DIR / "ts_repos.csv"
 REPOS_CSV = DATA_DIR / "repos.csv"  # Add path for repos data
 WEEKS_INTERVAL = 30  # It may be too costly to analyze all weeks
+NUM_PROCESSES = 8  # Number of processes to use for parallel processing
 
 
 def check_analysis_exists(project_key: str, version: str) -> bool:
@@ -191,6 +193,70 @@ def get_sonar_metrics(project_key: str) -> Optional[Dict]:
         return None
 
 
+def process_repository(
+    ts_df: pd.DataFrame, repos_df: pd.DataFrame, repo_name: str
+) -> pd.DataFrame:
+    """
+    Process a single repository's analysis.
+
+    Args:
+        ts_df: Time series dataframe
+        repos_df: Repository information dataframe
+        repo_name: Name of the repository to process
+
+    Returns:
+        pd.DataFrame: Updated time series dataframe for this repository
+    """
+    project_key = repo_name.replace("/", "_")
+    repo_path = CLONE_DIR / repo_name.replace("/", "_")
+    if not repo_path.exists():
+        logging.warning("Repository %s not found at %s", repo_name, repo_path)
+        return ts_df[ts_df["repo_name"] == repo_name]
+
+    # Get adoption week from repos data
+    repo_info = repos_df[repos_df["repo_name"] == repo_name]
+    if repo_info.empty or pd.isna(repo_info["repo_cursor_adoption"].iloc[0]):
+        logging.warning("No adoption found for %s, skipping", repo_name)
+        return ts_df[ts_df["repo_name"] == repo_name]
+
+    adoption = repo_info["repo_cursor_adoption"].iloc[0]
+    start_week = (adoption - pd.Timedelta(weeks=WEEKS_INTERVAL)).strftime("%Y-W%W")
+    end_week = (adoption + pd.Timedelta(weeks=WEEKS_INTERVAL)).strftime("%Y-W%W")
+    logging.info("Processing %s from %s to %s", repo_name, start_week, end_week)
+
+    # Get repository data
+    repo_df = ts_df[ts_df["repo_name"] == repo_name].copy()
+
+    # Filter weeks before and after adoption
+    weeks_in_range = sorted(
+        repo_df[(repo_df["week"] >= start_week) & (repo_df["week"] <= end_week)][
+            "week"
+        ].unique()
+    )
+
+    # Process each week's latest commit in chronological order
+    for week in weeks_in_range:
+        # Get the index in the repository dataframe
+        row_idx = repo_df[repo_df["week"] == week].index[0]
+        commit_hash = repo_df.loc[row_idx, "latest_commit"]
+
+        if not commit_hash:
+            logging.warning("No commit hash for %s at %s", repo_name, week)
+            continue
+
+        if not check_analysis_exists(project_key, week):
+            logging.info("%s at %s (%s)", repo_name, week, commit_hash[:8])
+            run_sonar_scan(repo_path, commit_hash, week, project_key)
+
+        metrics = get_sonar_metrics(project_key)
+        if metrics:
+            for metric, value in metrics.items():
+                repo_df.loc[row_idx, metric] = value
+        logging.info("Metrics for %s at %s: %s", repo_name, week, metrics)
+
+    return repo_df
+
+
 def main() -> None:
     """Main function to run SonarQube analysis on repositories."""
     logging.basicConfig(
@@ -215,64 +281,20 @@ def main() -> None:
         if col not in ts_df.columns:
             ts_df[col] = None
 
-    # Group by repository name to process each repo's commits
-    for repo_name, repo_group in ts_df.groupby("repo_name"):
-        project_key = repo_name.replace("/", "_")
-        repo_path = CLONE_DIR / repo_name.replace("/", "_")
-        if not repo_path.exists():
-            logging.warning("Repository %s not found at %s", repo_name, repo_path)
-            continue
+    # Get unique repository names
+    repo_names = ts_df["repo_name"].unique()
+    with mp.Pool(NUM_PROCESSES) as pool:
+        args = [(ts_df, repos_df, repo_name) for repo_name in repo_names]
+        results = pool.starmap(process_repository, args)
 
-        # Get adoption week from repos data
-        repo_info = repos_df[repos_df["repo_name"] == repo_name]
-        if repo_info.empty or pd.isna(repo_info["repo_cursor_adoption"].iloc[0]):
-            logging.warning("No adoption found for %s, skipping", repo_name)
-            continue
-
-        adoption = repo_info["repo_cursor_adoption"].iloc[0]
-        start_week = (adoption - pd.Timedelta(weeks=WEEKS_INTERVAL)).strftime("%Y-W%W")
-        end_week = (adoption + pd.Timedelta(weeks=WEEKS_INTERVAL)).strftime("%Y-W%W")
-        logging.info("Processing %s from %s to %s", repo_name, start_week, end_week)
-
-        # Filter weeks before and after adoption
-        weeks_in_range = sorted(
-            repo_group[
-                (repo_group["week"] >= start_week) & (repo_group["week"] <= end_week)
-            ]["week"].unique()
-        )
-
-        # Process each week's latest commit in chronological order
-        for week in weeks_in_range:
-            # Get the index in the original dataframe
-            row_idx = ts_df[
-                (ts_df["repo_name"] == repo_name) & (ts_df["week"] == week)
-            ].index[0]
-            commit_hash = ts_df.loc[row_idx, "latest_commit"]
-
-            if not commit_hash:
-                logging.warning("No commit hash for %s at %s", repo_name, week)
-                continue
-
-            if not check_analysis_exists(project_key, week):
-                logging.info("%s at %s (%s)", repo_name, week, commit_hash[:8])
-                run_sonar_scan(repo_path, commit_hash, week, project_key)
-
-            metrics = get_sonar_metrics(project_key)
-            if metrics:
-                for metric, value in metrics.items():
-                    ts_df.loc[row_idx, metric] = value
-            logging.info("Metrics for %s at %s: %s", repo_name, week, metrics)
-
-    # Rename to technical_debt
-    ts_df.rename(
+    updated_df = pd.concat(results)
+    updated_df.rename(
         columns={
             "software_quality_maintainability_remediation_effort": "technical_debt"
         },
         inplace=True,
     )
-
-    # Save updated dataframe
-    ts_df.to_csv(TS_REPOS_CSV, index=False)
+    updated_df.to_csv(TS_REPOS_CSV, index=False)
     logging.info("Updated metrics saved to %s", TS_REPOS_CSV)
 
 
