@@ -28,6 +28,16 @@ SONAR_PATH = os.getenv("SONAR_PATH")
 SONAR_TOKEN = os.getenv("SONAR_TOKEN")
 SONAR_HOST = "http://localhost:9000"
 
+# Metrics to collect from SonarQube
+METRICS_OF_INTEREST = [
+    "bugs",
+    "vulnerabilities",
+    "code_smells",
+    "duplicated_lines_density",
+    "comment_lines_density",
+    "cognitive_complexity",
+]
+
 # Paths
 SCRIPT_DIR = Path(__file__).parent
 DATA_DIR = SCRIPT_DIR.parent / "data"
@@ -157,10 +167,7 @@ def get_sonar_metrics(project_key: str) -> Optional[Dict]:
     try:
         url = f"{SONAR_HOST}/api/measures/component"
         headers = {"Authorization": f"Bearer {SONAR_TOKEN}"}
-        params = {
-            "component": project_key,
-            "metricKeys": "bugs,vulnerabilities,code_smells,coverage,duplicated_lines_density",
-        }
+        params = {"component": project_key, "metricKeys": ",".join(METRICS_OF_INTEREST)}
 
         response = requests.get(url, headers=headers, params=params)
         response.raise_for_status()
@@ -193,14 +200,7 @@ def main() -> None:
     ts_df = pd.read_csv(TS_REPOS_CSV)
 
     # Create columns for metrics if they don't exist
-    metric_columns = [
-        "bugs",
-        "vulnerabilities",
-        "code_smells",
-        "coverage",
-        "duplicated_lines_density",
-    ]
-    for col in metric_columns:
+    for col in METRICS_OF_INTEREST:
         if col not in ts_df.columns:
             ts_df[col] = None
 
