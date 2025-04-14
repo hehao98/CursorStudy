@@ -301,6 +301,7 @@ def process_repository(
                 {
                     "repo_name": repo_name,
                     "week": week,
+                    "latest_commit": stats["latest_commit"],
                     "commits": stats["commits"],
                     "lines_added": stats["lines_added"],
                     "contributors": stats["contributors"],

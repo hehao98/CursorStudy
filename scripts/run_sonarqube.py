@@ -36,6 +36,7 @@ METRICS_OF_INTEREST = [
     "duplicated_lines_density",
     "comment_lines_density",
     "cognitive_complexity",
+    "software_quality_maintainability_remediation_effort",  # technical debt
 ]
 
 # Paths
@@ -236,6 +237,14 @@ def main() -> None:
             if metrics:
                 for metric, value in metrics.items():
                     ts_df.loc[row_idx, metric] = value
+
+    # Rename to technical_debt
+    ts_df.rename(
+        columns={
+            "software_quality_maintainability_remediation_effort": "technical_debt"
+        },
+        inplace=True,
+    )
 
     # Save updated dataframe
     ts_df.to_csv(TS_REPOS_CSV, index=False)
