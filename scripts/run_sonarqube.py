@@ -285,7 +285,7 @@ def main() -> None:
     repo_names = ts_df["repo_name"].unique()
     with mp.Pool(NUM_PROCESSES) as pool:
         args = [(ts_df, repos_df, repo_name) for repo_name in repo_names]
-        results = pool.starmap(process_repository, args)
+        results = pool.starmap(process_repository, args, chunksize=1)
 
     updated_df = pd.concat(results)
     updated_df.rename(
