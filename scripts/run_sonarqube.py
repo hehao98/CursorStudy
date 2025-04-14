@@ -12,7 +12,6 @@ import logging
 import os
 import subprocess
 import sys
-from datetime import datetime
 from pathlib import Path
 from typing import Dict, Optional
 
@@ -125,7 +124,7 @@ def run_sonar_scan(
                 "-Dsonar.scm.disabled=true",  # Disable SCM to speed up analysis
             ]
 
-            result = subprocess.run(
+            subprocess.run(
                 cmd, cwd=repo_path, capture_output=True, text=True, check=True
             )
             logging.info("SonarQube scan completed for %s at %s", project_key, version)
