@@ -139,6 +139,7 @@ def run_sonar_scan(
                 f"-Dsonar.projectName={project_key}",
                 f"-Dsonar.projectVersion={version}",
                 "-Dsonar.sources=.",
+                f"-Dsonar.java.binaries=.",  # Fix Java errors, hopefully we find some .class here
                 f"-Dsonar.host.url={SONAR_HOST}",
                 f"-Dsonar.token={SONAR_TOKEN}",
                 "-Dsonar.scm.disabled=true",  # Disable SCM to speed up analysis
