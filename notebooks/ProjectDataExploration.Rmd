@@ -25,10 +25,49 @@ allRepos$repo_cursor_adoption <- as_datetime(allRepos$repo_cursor_adoption)
 allRepos$repo_created <- as_datetime(allRepos$repo_created)
 allRepos$repo_updated <- as_datetime(allRepos$repo_updated)
 
+# importing dataset with cursor rules for all repos (no qualitfying filter)
+allCursorFiles <- read_csv("../data/cursor_files.csv")
 
 
 knitr::opts_chunk$set(echo = TRUE)
 ```
+
+
+```{r}
+
+# looking at how many of the rules came from projects with at least 10 stars 
+allCursorFiles %>% filter(repo_name %in% atLeast10Stars$repo_name)
+
+
+
+
+
+# generating random sample of 100 cursor rules
+# from subset of cursor rules coming from projects with at least 10 stars
+set.seed(111611) 
+
+atLeast10Stars <- allRepos %>% filter(repo_stars > 10)
+
+cursorRulesFrom10StarPlusProjects <- allCursorFiles %>% filter(repo_name %in% atLeast10Stars$repo_name)
+
+randomSample <- cursorRulesFrom10StarPlusProjects[sample(nrow(cursorRulesFrom10StarPlusProjects), 100), ]
+
+# writing random sample to csv
+write.csv(randomSample, "../data/cursor_rules_randomSample.csv", row.names=TRUE, quote=FALSE)
+
+```
+
+```{r}
+#  since not all the rules pulled qualified (mostly because they're not in engligh)
+# I'm generating another backup random sample to pull from when we need to get a replacemement 
+
+randomSampleBackup <- cursorRulesFrom10StarPlusProjects[sample(nrow(cursorRulesFrom10StarPlusProjects), 100), ]
+
+# writing random sample to csv
+write.csv(randomSampleBackup, "../data/cursor_rules_randomSample_backup.csv", row.names=TRUE, quote=FALSE)
+
+```
+
 
 
 # Exploring identified projects
@@ -42,6 +81,7 @@ allRepos <- allRepos %>% mutate(elapsedDaysSinceCursorAdoption = as.numeric(curr
 allRepos <- allRepos %>% mutate(elapsedDaysBeforeCursorAdoption = as.numeric(allRepos$repo_cursor_adoption - allRepos$repo_created, units = "days"))
 
 ```
+
 
 
 ## data exploration 
