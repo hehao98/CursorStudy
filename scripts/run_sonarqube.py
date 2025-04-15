@@ -34,6 +34,7 @@ METRICS_OF_INTEREST = [
     "bugs",
     "vulnerabilities",
     "code_smells",
+    "ncloc",
     "duplicated_lines_density",
     "comment_lines_density",
     "cognitive_complexity",
@@ -47,7 +48,7 @@ CLONE_DIR = SCRIPT_DIR.parent.parent / "CursorRepos"
 TS_REPOS_CSV = DATA_DIR / "ts_repos.csv"
 REPOS_CSV = DATA_DIR / "repos.csv"  # Add path for repos data
 WEEKS_INTERVAL = 30  # It may be too costly to analyze all weeks
-NUM_PROCESSES = 8  # Number of processes to use for parallel processing
+NUM_PROCESSES = 16  # Number of processes to use for parallel processing
 
 
 def check_analysis_exists(project_key: str, version: str) -> bool:
