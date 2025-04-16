@@ -50,6 +50,9 @@ REPOS_CSV = DATA_DIR / "repos.csv"  # Add path for repos data
 WEEKS_INTERVAL = 30  # It may be too costly to analyze all weeks
 NUM_PROCESSES = 16  # Number of processes to use for parallel processing
 
+# Taking too long to analyze plus no metrics are able to be collected
+REPO_IGNORE = ["meshery/meshery"]
+
 
 def check_analysis_exists(project_key: str, version: str) -> bool:
     """
@@ -284,7 +287,7 @@ def main() -> None:
             ts_df[col] = None
 
     # Get unique repository names
-    repo_names = ts_df["repo_name"].unique()
+    repo_names = set(ts_df["repo_name"].unique()) - set(REPO_IGNORE)
     with mp.Pool(NUM_PROCESSES) as pool:
         args = [(ts_df, repos_df, repo_name) for repo_name in repo_names]
         results = pool.starmap(process_repository, args, chunksize=1)
