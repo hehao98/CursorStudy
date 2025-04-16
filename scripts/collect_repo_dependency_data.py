@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Dict, Optional
 
 import git
+import json
 import pandas as pd
 import requests
 from dotenv import load_dotenv
@@ -31,11 +32,66 @@ METRICS_OF_INTEREST = [
 # Paths
 SCRIPT_DIR = Path(__file__).parent
 DATA_DIR = SCRIPT_DIR.parent / "data"
-CLONE_DIR = SCRIPT_DIR / "CursorRepos"
+CLONE_DIR = SCRIPT_DIR.parent.parent / "CursorRepos"
 TS_REPOS_CSV = DATA_DIR / "ts_repos.csv"
 REPOS_CSV = DATA_DIR / "repos.csv"  # Add path for repos data
-WEEKS_INTERVAL = 30  # It may be too costly to analyze all weeks
+WEEKS_INTERVAL = 52  # It may be too costly to analyze all weeks
 NUM_PROCESSES = 16  # Number of processes to use for parallel processing
+
+
+def pull_package_json_file_from_repo(repo_path: Path, commit_hash: str
+) -> Optional[Dict]:
+    """
+        Pull package.json data from a specific commit.
+
+        Args:
+            repo_path: Path to the repository
+            commit_hash: Git commit hash to analyze
+
+        Returns:
+            bool: True if scan was successful, False otherwise
+        """
+    try:
+        # Checkout the specific commit
+        repo = git.Repo(str(repo_path))
+        current = repo.head.commit
+
+        # Force checkout and clean the working directory
+        repo.git.reset("--hard")
+        repo.git.clean("-fd")
+        repo.git.checkout(commit_hash, force=True)
+
+        try:
+            # Define the path to package.json in the repo root
+            package_json_path = os.path.join(repo_path, "package.json")
+
+            if os.path.exists(package_json_path):
+                print("Found package.json. Reading contents...")
+                # Open and load the package.json file
+                with open(package_json_path, "r", encoding="utf-8") as f:
+                    package_data = json.load(f)
+
+                # Extract dependency sections if they exist
+                dependencies = package_data.get("dependencies", {})
+                dev_dependencies = package_data.get("devDependencies", {})
+                peer_dependencies = package_data.get("peerDependencies", {})
+
+                # For demonstration purposes, print the extracted dependencies
+                print("Dependencies:", dependencies)
+                print("Dev Dependencies:", dev_dependencies)
+                print("Peer Dependencies:", peer_dependencies)
+            else:
+                print("package.json does not exist in this repository at commit", commit_hash)
+            return True
+
+        finally:
+            # Always return to original commit
+            repo.git.checkout(current)
+
+    except Exception as e:
+        logging.error("Error during collection of package.json for %s at %s: %s", repo_path, commit_hash, str(e))
+        return False
+
 
 
 def process_repository(
@@ -52,7 +108,6 @@ def process_repository(
     Returns:
         pd.DataFrame: Updated time series dataframe for this repository
     """
-    project_key = repo_name.replace("/", "_")
     repo_path = CLONE_DIR / repo_name.replace("/", "_")
     if not repo_path.exists():
         logging.warning("Repository %s not found at %s", repo_name, repo_path)
@@ -72,6 +127,7 @@ def process_repository(
     # Get repository data
     repo_df = ts_df[ts_df["repo_name"] == repo_name].copy()
 
+    print(adoption)
     print(repo_df)
 
 
@@ -82,25 +138,29 @@ def process_repository(
         ].unique()
     )
 
-    # # Process each week's latest commit in chronological order
-    # for week in weeks_in_range:
-    #     # Get the index in the repository dataframe
-    #     row_idx = repo_df[repo_df["week"] == week].index[0]
-    #     commit_hash = repo_df.loc[row_idx, "latest_commit"]
-    #
-    #     if not commit_hash:
-    #         logging.warning("No commit hash for %s at %s", repo_name, week)
-    #         continue
-    #
-    #     if not check_analysis_exists(project_key, week):
-    #         logging.info("%s at %s (%s)", repo_name, week, commit_hash[:8])
-    #         run_sonar_scan(repo_path, commit_hash, week, project_key)
-    #
-    #     metrics = get_sonar_metrics(project_key)
-    #     if metrics:
-    #         for metric, value in metrics.items():
-    #             repo_df.loc[row_idx, metric] = value
-    #     logging.info("Metrics for %s at %s: %s", repo_name, week, metrics)
+
+    # Process each week's latest commit in chronological order
+    for week in weeks_in_range:
+        # Get the index in the repository dataframe
+        row_idx = repo_df[repo_df["week"] == week].index[0]
+        commit_hash = repo_df.loc[row_idx, "latest_commit"]
+
+        print(row_idx, commit_hash)
+
+        if not commit_hash:
+            logging.warning("No commit hash for %s at %s", repo_name, week)
+            continue
+
+        # Add check here to see if we've already collected dependency data for this repo TODO
+
+        # pulling package.json for this commit
+        results = pull_package_json_file_from_repo(repo_path, commit_hash)
+
+        # metrics = get_sonar_metrics(project_key)
+        # if metrics:
+        #     for metric, value in metrics.items():
+        #         repo_df.loc[row_idx, metric] = value
+        # logging.info("Metrics for %s at %s: %s", repo_name, week, metrics)
 
     return repo_df
 
@@ -130,11 +190,10 @@ def main() -> None:
     repo_names = ts_df["repo_name"].unique()
 
     # pull name of first repo as example TODO
-    repo_name = repo_names[0]
+    repo_name = repo_names[2]
 
     # pulling results for repo
     results = process_repository(ts_df, repos_df, repo_name)
-
 
 
 
