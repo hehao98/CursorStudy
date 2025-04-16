@@ -40,10 +40,23 @@ TS_REPOS_CSV = DATA_DIR / "ts_repos.csv"
 REPOS_CSV = DATA_DIR / "repos.csv"  # Add path for repos data
 WEEKS_INTERVAL = 52  # It may be too costly to analyze all weeks
 NUM_PROCESSES = 16  # Number of processes to use for parallel processing
+DEPENDENCY_DECLARATIONS_CSV = DATA_DIR / "dependency_declarations.csv"
+UNIQUE_PACKAGE_VERSIONS_CSV = DATA_DIR / "unique_dependency_package_versions.csv"
 
 
-#def parse_and_store_dependency_declarations()
-#def parse_and_store_dependency_declarations(repo_name, week, commit_hash, results):
+
+def parse_and_store_dependency_declarations(repo_name, week, commit_hash, results):
+    """
+    Parse and store dependency declarations for a specific repository and week.
+
+    Args:
+        repo_name: Name of the repository
+    """
+
+
+
+
+
 
 
 def pull_package_json_file_from_repo(repo_path: Path, commit_hash: str
