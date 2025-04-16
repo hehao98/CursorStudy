@@ -31,7 +31,7 @@ METRICS_OF_INTEREST = [
 # Paths
 SCRIPT_DIR = Path(__file__).parent
 DATA_DIR = SCRIPT_DIR.parent / "data"
-CLONE_DIR = SCRIPT_DIR.parent.parent / "CursorRepos"
+CLONE_DIR = SCRIPT_DIR / "CursorRepos"
 TS_REPOS_CSV = DATA_DIR / "ts_repos.csv"
 REPOS_CSV = DATA_DIR / "repos.csv"  # Add path for repos data
 WEEKS_INTERVAL = 30  # It may be too costly to analyze all weeks
