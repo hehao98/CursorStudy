@@ -26,7 +26,10 @@ load_dotenv(override=True)
 
 # Metrics to collect from SonarQube
 METRICS_OF_INTEREST = [
-    "num_dependencies",  # technical debt
+    "num_dependencies_total",  # technical debt
+    "num_normal_dependencies",
+    "num_dev_dependencies",
+    "num_peer_dependencies"
 ]
 
 # Paths
@@ -39,6 +42,10 @@ WEEKS_INTERVAL = 52  # It may be too costly to analyze all weeks
 NUM_PROCESSES = 16  # Number of processes to use for parallel processing
 
 
+#def parse_and_store_dependency_declarations()
+#def parse_and_store_dependency_declarations(repo_name, week, commit_hash, results):
+
+
 def pull_package_json_file_from_repo(repo_path: Path, commit_hash: str
 ) -> Optional[Dict]:
     """
@@ -49,8 +56,10 @@ def pull_package_json_file_from_repo(repo_path: Path, commit_hash: str
             commit_hash: Git commit hash to analyze
 
         Returns:
-            bool: True if scan was successful, False otherwise
+            dict: returns dictionary with up to three entries (for each of the three dependency types normal,dev, and peer. Or None if we
+            were unable to parse the package.json data
         """
+
     try:
         # Checkout the specific commit
         repo = git.Repo(str(repo_path))
@@ -61,9 +70,15 @@ def pull_package_json_file_from_repo(repo_path: Path, commit_hash: str
         repo.git.clean("-fd")
         repo.git.checkout(commit_hash, force=True)
 
+        print("sucessfully cloned repo")
+
+        package_json_path = os.path.join(repo_path, "package.json")
+        print("checking to see if package.json exists", os.path.exists(package_json_path))
+
         try:
             # Define the path to package.json in the repo root
             package_json_path = os.path.join(repo_path, "package.json")
+            print("checking to see if package.json exists", os.path.exists(package_json_path))
 
             if os.path.exists(package_json_path):
                 print("Found package.json. Reading contents...")
@@ -77,12 +92,19 @@ def pull_package_json_file_from_repo(repo_path: Path, commit_hash: str
                 peer_dependencies = package_data.get("peerDependencies", {})
 
                 # For demonstration purposes, print the extracted dependencies
-                print("Dependencies:", dependencies)
-                print("Dev Dependencies:", dev_dependencies)
-                print("Peer Dependencies:", peer_dependencies)
+                #print("Dependencies:", dependencies)
+                #print("Dev Dependencies:", dev_dependencies)
+                #print("Peer Dependencies:", peer_dependencies)
+
+                # creating dictionary with all dependency data
+                dependency_dict = {
+                    "dependencies": dependencies,
+                    "devDependencies": dev_dependencies,
+                    "peerDependencies": peer_dependencies
+                }
             else:
                 print("package.json does not exist in this repository at commit", commit_hash)
-            return True
+            return dependency_dict
 
         finally:
             # Always return to original commit
@@ -90,7 +112,7 @@ def pull_package_json_file_from_repo(repo_path: Path, commit_hash: str
 
     except Exception as e:
         logging.error("Error during collection of package.json for %s at %s: %s", repo_path, commit_hash, str(e))
-        return False
+        return None
 
 
 
@@ -127,10 +149,6 @@ def process_repository(
     # Get repository data
     repo_df = ts_df[ts_df["repo_name"] == repo_name].copy()
 
-    print(adoption)
-    print(repo_df)
-
-
     # Filter weeks before and after adoption
     weeks_in_range = sorted(
         repo_df[(repo_df["week"] >= start_week) & (repo_df["week"] <= end_week)][
@@ -153,14 +171,30 @@ def process_repository(
 
         # Add check here to see if we've already collected dependency data for this repo TODO
 
-        # pulling package.json for this commit
+        # pulling dependencies from package.json for this commit
         results = pull_package_json_file_from_repo(repo_path, commit_hash)
 
-        # metrics = get_sonar_metrics(project_key)
-        # if metrics:
-        #     for metric, value in metrics.items():
-        #         repo_df.loc[row_idx, metric] = value
-        # logging.info("Metrics for %s at %s: %s", repo_name, week, metrics)
+        # add check for if the results are None meaning we could not collect the package.json data
+        if results is None:
+            return ts_df[ts_df["repo_name"] == repo_name]
+
+        # save all dependency declarations in other function and create unique list of packages and versions for next data collection
+        print(week)
+        #parse_and_store_dependency_declarations(repo_name, week, commit_hash, results)
+
+
+        # calculating the metrics of interest
+        metrics = {
+            "num_dependencies_total": len(results["dependencies"]) + len(results["devDependencies"]) + len(results["peerDependencies"]),
+            "num_normal_dependencies": len(results["dependencies"]),
+            "num_dev_dependencies": len(results["devDependencies"]),
+            "num_peer_dependencies": len(results["peerDependencies"])
+        }
+
+        if metrics:
+            for metric, value in metrics.items():
+                repo_df.loc[row_idx, metric] = value
+        logging.info("Metrics for %s at %s: %s", repo_name, week, metrics)
 
     return repo_df
 
@@ -190,7 +224,8 @@ def main() -> None:
     repo_names = ts_df["repo_name"].unique()
 
     # pull name of first repo as example TODO
-    repo_name = repo_names[2]
+    # repo_names[2] doesn't have package.json
+    repo_name = repo_names[0]
 
     # pulling results for repo
     results = process_repository(ts_df, repos_df, repo_name)
