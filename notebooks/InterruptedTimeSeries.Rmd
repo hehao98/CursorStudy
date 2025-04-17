@@ -280,47 +280,23 @@ cm <- c(
     "log(contributors + 1)" = "Contributors"
 )
 
-# Create lists of related models for summary tables
-productivity_models <- list(
+# Combine all repository-level models into one list
+all_repo_models <- list(
     "Commits" = model_commits_repo,
-    "Lines Added" = model_lines_repo
-)
-
-quality_models <- list(
+    "Lines Added" = model_lines_repo,
     "Bugs" = model_bugs_repo,
     "Vulnerabilities" = model_vulnerabilities_repo,
     "Code Smells" = model_code_smells_repo,
-    "Technical Debt" = model_tech_debt_repo
-)
-
-structure_models <- list(
+    "Technical Debt" = model_tech_debt_repo,
     "Duplicated Lines" = model_duplicated_lines_repo,
     "Comment Lines" = model_comment_lines_repo,
     "Cognitive Complexity" = model_complexity_repo
 )
 
-# Generate model summary tables using modelsummary
+# Generate combined model summary table
 modelsummary(
-    productivity_models,
-    title = "Repository-Level Productivity Models",
-    stars = TRUE,
-    gof_map = c("nobs", "r.squared", "adj.r.squared"),
-    coef_map = cm,
-    output = "html"
-)
-
-modelsummary(
-    quality_models,
-    title = "Repository-Level Code Quality Models",
-    stars = TRUE,
-    gof_map = c("nobs", "r.squared", "adj.r.squared"),
-    coef_map = cm,
-    output = "html"
-)
-
-modelsummary(
-    structure_models,
-    title = "Repository-Level Code Structure Models",
+    all_repo_models,
+    title = "Repository-Level Interrupted Time Series Models",
     stars = TRUE,
     gof_map = c("nobs", "r.squared", "adj.r.squared"),
     coef_map = cm,
