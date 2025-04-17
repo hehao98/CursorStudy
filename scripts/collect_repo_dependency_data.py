@@ -311,7 +311,7 @@ def resolve_semantic_version(package_name: str, semantic_version: str, week: str
 def parse_and_store_dependency_declarations(repo_name: str, week: str, commit_hash: str, results: Dict) -> None:
     """
     Parse and store dependency declarations for a specific repository and week.
-    
+
     Args:
         repo_name: Name of the repository
         week: Week identifier (YYYY-WXX format)
@@ -372,54 +372,43 @@ def pull_package_json_file_from_repo(repo_path: Path, commit_hash: str) -> Optio
         dict: Dictionary with dependency information, or None if unable to parse
     """
     try:
-        # Checkout the specific commit
+        # Initialize dependency_dict with empty objects
+        dependency_dict = {
+            "dependencies": {},
+            "devDependencies": {},
+            "peerDependencies": {}
+        }
+
+        # Initialize git repo without checkout
         repo = git.Repo(str(repo_path))
-        current = repo.head.commit
-
-        # Force checkout and clean the working directory
-        repo.git.reset("--hard")
-        repo.git.clean("-fd")
-        repo.git.checkout(commit_hash, force=True)
-
-        print("sucessfully cloned repo")
-
-        package_json_path = os.path.join(repo_path, "package.json")
-        print("checking to see if package.json exists", os.path.exists(package_json_path))
-
+        
+        # Try to get package.json content directly from git without checking out
         try:
-            # Define the path to package.json in the repo root
-            package_json_path = os.path.join(repo_path, "package.json")
-            print("checking to see if package.json exists", os.path.exists(package_json_path))
-
-            if os.path.exists(package_json_path):
-                print("Found package.json. Reading contents...")
-                # Open and load the package.json file
-                with open(package_json_path, "r", encoding="utf-8") as f:
-                    package_data = json.load(f)
-
-                # Extract dependency sections if they exist
-                dependencies = package_data.get("dependencies", {})
-                dev_dependencies = package_data.get("devDependencies", {})
-                peer_dependencies = package_data.get("peerDependencies", {})
-
-                # For demonstration purposes, print the extracted dependencies
-                #print("Dependencies:", dependencies)
-                #print("Dev Dependencies:", dev_dependencies)
-                #print("Peer Dependencies:", peer_dependencies)
-
-                # creating dictionary with all dependency data
-                dependency_dict = {
-                    "dependencies": dependencies,
-                    "devDependencies": dev_dependencies,
-                    "peerDependencies": peer_dependencies
-                }
-            else:
-                print("package.json does not exist in this repository at commit", commit_hash)
+            # Get file content at specific commit without checking out
+            file_content = repo.git.show(f"{commit_hash}:package.json")
+            logging.info("Successfully retrieved package.json content from commit %s", commit_hash)
+            
+            # Parse JSON content
+            package_data = json.loads(file_content)
+            
+            # Extract dependency sections if they exist
+            dependencies = package_data.get("dependencies", {})
+            dev_dependencies = package_data.get("devDependencies", {})
+            peer_dependencies = package_data.get("peerDependencies", {})
+            
+            # creating dictionary with all dependency data
+            dependency_dict = {
+                "dependencies": dependencies,
+                "devDependencies": dev_dependencies,
+                "peerDependencies": peer_dependencies
+            }
+            
             return dependency_dict
-
-        finally:
-            # Always return to original commit
-            repo.git.checkout(current)
+            
+        except git.exc.GitCommandError:
+            # If the file doesn't exist in the commit
+            print("package.json does not exist in this repository at commit", commit_hash)
+            return dependency_dict
 
     except Exception as e:
         logging.error("Error during collection of package.json for %s at %s: %s", repo_path, commit_hash, str(e))
@@ -479,12 +468,13 @@ def process_repository(
             continue
 
         # Add check here to see if we've already collected dependency data for this repo TODO
-
+        print("attempting to pull dependencies from package.json for this commit")
         # pulling dependencies from package.json for this commit
         results = pull_package_json_file_from_repo(repo_path, commit_hash)
 
         # add check for if the results are None meaning we could not collect the package.json data
         if results is None:
+            logging.error("Failed to extract package.json data for %s at %s", repo_name, commit_hash)
             return ts_df[ts_df["repo_name"] == repo_name]
 
         # save all dependency declarations in other function and create unique list of packages and versions for next data collection
@@ -534,10 +524,16 @@ def main() -> None:
 
     # pull name of first repo as example TODO
     # repo_names[2] doesn't have package.json
-    repo_name = repo_names[0]
+    #repo_name = repo_names[1]
+    # pulling results ror repo
+    #results = process_repository(ts_df, repos_df, repo_name)
+    with mp.Pool(NUM_PROCESSES) as pool:
+        args = [(ts_df, repos_df, repo_name) for repo_name in repo_names]
+        results = pool.starmap(process_repository, args, chunksize=1)
 
-    # pulling results for repo
-    results = process_repository(ts_df, repos_df, repo_name)
+    updated_df = pd.concat(results)
+    updated_df.sort_values(by=["repo_name", "week"]).to_csv(TS_REPOS_CSV, index=False)
+    logging.info("Updated metrics saved to %s", TS_REPOS_CSV)
 
 if __name__ == "__main__":
     main()
