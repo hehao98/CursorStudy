@@ -26,8 +26,18 @@ TS_CONTRIBUTORS_CSV = Path(__file__).parent.parent / "data" / "ts_contributors.c
 CURSOR_COMMITS_CSV = Path(__file__).parent.parent / "data" / "cursor_commits.csv"
 REPO_OUTPUT_FILE = Path(__file__).parent.parent / "data" / "its_repos.csv"
 CONTRIBUTOR_OUTPUT_FILE = Path(__file__).parent.parent / "data" / "its_contributors.csv"
-REPO_MIN_WEEKS_BEFORE_ADOPTION = 30
-CONTRIBUTOR_MIN_WEEKS_BEFORE_ADOPTION = 30
+
+DYNAMIC_METRICS = ["commits", "lines_added", "contributors"]
+ACCUMULATIVE_METRICS = [
+    "bugs",
+    "vulnerabilities",
+    "code_smells",
+    "ncloc",
+    "duplicated_lines_density",
+    "comment_lines_density",
+    "cognitive_complexity",
+    "technical_debt",
+]
 
 
 def pad_missing_weeks(
@@ -78,9 +88,16 @@ def pad_missing_weeks(
         merged_df = pd.merge(
             full_weeks_df, group_data, on=group_columns + ["week"], how="left"
         )
-        for col in ["commits", "lines_added", "contributors"]:
+
+        # Fill dynamic metrics with zeros
+        for col in DYNAMIC_METRICS:
             if col in merged_df.columns:
                 merged_df[col] = merged_df[col].fillna(0)
+
+        # Forward-fill accumulative metrics from previous values
+        for col in ACCUMULATIVE_METRICS:
+            if col in merged_df.columns:
+                merged_df[col] = merged_df[col].ffill()
 
         padded_ts_dfs.append(merged_df)
 
@@ -91,7 +108,6 @@ def process_time_series(
     time_series_data: pd.DataFrame,
     entity_id: Dict[str, str],
     adoption_week: str,
-    #min_weeks_before_adoption: int,
     entity_type: str = "repository",
 ) -> List[Dict[str, Any]]:
     """
@@ -101,7 +117,6 @@ def process_time_series(
         time_series_data: Weekly time series data for the entity
         entity_id: Dictionary with entity identification (repo_name, author_email, etc.)
         adoption_week: Week when adoption occurred
-        min_weeks_before_adoption: Minimum number of weeks required before adoption
         entity_type: Type of entity ("repository" or "contributor")
 
     Returns:
@@ -140,13 +155,6 @@ def process_time_series(
             f"Using {adoption_week} as adoption week for {entity_name} (original: {original_adoption_week})"
         )
 
-    # Need at least min_weeks_before_adoption weeks before adoption
-    #if adoption_idx < min_weeks_before_adoption:
-     #   logging.debug(
-     #       f"Skipping {entity_name}: Not enough history before adoption ({adoption_idx} weeks)"
-     #   )
-     #   return []
-
     logging.debug(f"Processing {entity_name}: Found adoption at week {adoption_week}")
     results = []
 
@@ -174,6 +182,21 @@ def process_time_series(
         # Handle contributors column differently based on entity type
         if entity_type == "repository":
             result["contributors"] = int(week_data["contributors"].iloc[0])
+
+            # Add additional metrics from ts_repos.csv if they exist
+            for metric in ACCUMULATIVE_METRICS:
+                if metric in week_data.columns and not pd.isna(
+                    week_data[metric].iloc[0]
+                ):
+                    value = week_data[metric].iloc[0]
+                    # Convert numeric values to int or float as appropriate
+                    if isinstance(value, (int, float)):
+                        try:
+                            if value == int(value):
+                                value = int(value)
+                        except:
+                            pass
+                    result[metric] = value
 
         results.append(result)
 
@@ -317,7 +340,7 @@ def prepare_repo_its_dataset(weekly_ts_df: pd.DataFrame) -> pd.DataFrame:
             time_series_data=repo_data,
             entity_id={"repo_name": repo_name},
             adoption_week=adoption_week,
-            #min_weeks_before_adoption=REPO_MIN_WEEKS_BEFORE_ADOPTION,
+            # min_weeks_before_adoption=REPO_MIN_WEEKS_BEFORE_ADOPTION,
             entity_type="repository",
         )
 
@@ -364,7 +387,7 @@ def prepare_contributor_its_dataset(contributor_ts_df: pd.DataFrame) -> pd.DataF
             time_series_data=contributor_data,
             entity_id={"repo_name": repo_name, "author_name": author_name},
             adoption_week=adoption_week,
-            #min_weeks_before_adoption=CONTRIBUTOR_MIN_WEEKS_BEFORE_ADOPTION,
+            # min_weeks_before_adoption=CONTRIBUTOR_MIN_WEEKS_BEFORE_ADOPTION,
             entity_type="contributor",
         )
 
