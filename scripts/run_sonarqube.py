@@ -168,33 +168,86 @@ def run_sonar_scan(
         return False
 
 
-def get_sonar_metrics(project_key: str) -> Optional[Dict]:
+def get_sonar_metrics(project_key: str, version: str) -> Optional[Dict]:
     """
-    Get metrics from SonarQube API for a project.
+    Get metrics from SonarQube API for a project and specific version.
 
     Args:
         project_key: SonarQube project key
+        version: Version identifier of the analysis
 
     Returns:
         dict: Metrics data or None if request failed
     """
     try:
-        url = f"{SONAR_HOST}/api/measures/component"
-        headers = {"Authorization": f"Bearer {SONAR_TOKEN}"}
-        params = {"component": project_key, "metricKeys": ",".join(METRICS_OF_INTEREST)}
+        # First, find the analysis with the matching version to get its date
+        analysis_date = None
+        page = 1
+
+        while analysis_date is None:
+            url = f"{SONAR_HOST}/api/project_analyses/search"
+            headers = {"Authorization": f"Bearer {SONAR_TOKEN}"}
+            params = {
+                "project": project_key,
+                "category": "VERSION",
+                "ps": 100,  # Page size
+                "p": page,  # Page number
+            }
+
+            response = requests.get(url, headers=headers, params=params)
+            response.raise_for_status()
+
+            data = response.json()
+
+            # Find the analysis with matching version to get its date
+            if "analyses" in data and data["analyses"]:
+                for analysis in data["analyses"]:
+                    if analysis.get("projectVersion") == version:
+                        analysis_date = analysis.get("date")
+                        break
+
+                # If we haven't found the analysis and there are more pages, continue to the next page
+                if analysis_date is None and len(data["analyses"]) == 100:
+                    page += 1
+                else:
+                    break  # No more results or found the analysis
+            else:
+                break  # No analyses returned
+
+        if not analysis_date:
+            logging.warning("No analysis found for %s version %s", project_key, version)
+            return None
+
+        # Now get the measures for this specific date using search_history
+        url = f"{SONAR_HOST}/api/measures/search_history"
+        params = {
+            "component": project_key,
+            "metrics": ",".join(METRICS_OF_INTEREST),
+            "from": analysis_date,
+            "to": analysis_date,
+        }
 
         response = requests.get(url, headers=headers, params=params)
         response.raise_for_status()
 
         data = response.json()
         metrics = {}
-        for measure in data["component"]["measures"]:
-            metrics[measure["metric"]] = float(measure["value"])
 
-        return metrics
+        if "measures" in data:
+            for measure in data["measures"]:
+                if (
+                    measure["history"]
+                    and len(measure["history"]) > 0
+                    and "value" in measure["history"][0]
+                ):
+                    metrics[measure["metric"]] = float(measure["history"][0]["value"])
+
+        return metrics if metrics else None
 
     except requests.exceptions.RequestException as e:
-        logging.error("Failed to get metrics for %s: %s", project_key, str(e))
+        logging.error(
+            "Failed to get metrics for %s version %s: %s", project_key, version, str(e)
+        )
         return None
 
 
@@ -253,7 +306,7 @@ def process_repository(
             logging.info("%s at %s (%s)", repo_name, week, commit_hash[:8])
             run_sonar_scan(repo_path, commit_hash, week, project_key)
 
-        metrics = get_sonar_metrics(project_key)
+        metrics = get_sonar_metrics(project_key, week)
         if metrics:
             for metric, value in metrics.items():
                 repo_df.loc[row_idx, metric] = value
