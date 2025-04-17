@@ -9,16 +9,17 @@ output: html_document
 library(ggplot2)
 library(tidyverse)
 library(fixest)
+library(readr)
 
 its_repos <- read_csv("../data/its_repos.csv")
 
 ts_repos <- read_csv("../data/ts_repos.csv")
 
-# importing dataset with data for all repos (no qualitfying filter)
+# importing dataset with data for all repos (no qualifying filter)
 allRepos <- read_csv("../data/repos.csv")
 
 # creating datetime object with current date 
-current_date <- as_datetime("2025-04-03 09:00:00")
+current_date <- as_datetime("2025-04-17 09:00:00")
 
 # casting date cols to date format
 allRepos$repo_cursor_adoption <- as_datetime(allRepos$repo_cursor_adoption)
@@ -38,6 +39,89 @@ allRepos <- allRepos %>% mutate(elapsedDaysSinceCursorAdoption = as.numeric(curr
 # creating col calculating how long the project existed before adopting cursor (time delta b/w repo creation and cursor adoption date)
 allRepos <- allRepos %>% mutate(elapsedDaysBeforeCursorAdoption = as.numeric(allRepos$repo_cursor_adoption - allRepos$repo_created, units = "days"))
 ```
+
+
+### ALT exploration 
+
+```{r}
+# creating balanced event_time metric 
+
+# Step 1: Find the intervention week number (from `time`) for each repo
+intervention_weeks <- its_repos %>%
+  filter(intervention == 1) %>%
+  group_by(repo_name) %>%
+  summarize(intervention_week = min(time))
+
+# Step 2: Join that back into the main dataset
+its_repos <- its_repos %>%
+  left_join(intervention_weeks, by = "repo_name") %>%
+  mutate(event_time = time - intervention_week)
+
+```
+
+
+```{r}
+# First identify repos that have the full range of -17 to -17 weeks
+complete_repos <- its_repos %>%
+  group_by(repo_name) %>%
+  summarize(
+    has_full_range = all(seq(-17, 17) %in% event_time),
+    n_weeks = n()
+  ) %>%
+  filter(has_full_range == TRUE)
+
+
+# Create dataset with only -17 to 17 weeks for qualifying repos
+pr_qualifyingRepos <- its_repos %>%
+  filter(
+    repo_name %in% complete_repos$repo_name,
+    event_time >= -17,
+    event_time <= 17
+  )
+
+# Verify each repo has exactly 35 weeks
+timebox_check <- pr_qualifyingRepos %>%
+  group_by(repo_name) %>%
+  summarize(n_weeks = n())
+
+print("Number of repos in timeboxed dataset:")
+print(nrow(timebox_check))
+print("\nVerifying each repo has 35 weeks:")
+print(all(timebox_check$n_weeks == 35))
+
+
+# check to see for how many cases there are null values for some of the response variables 
+colSums(is.na(pr_qualifyingRepos))
+
+pr_qualifyingRepos[!complete.cases(pr_qualifyingRepos), ]
+# it appears there are 56 rows w/ NA values coming from three repos, "serversideup/docker-ssh","labnol/react-tailwind","synatic/noql"
+# since they have missing data I will exclude them from the modeling 
+
+
+# excluding data from repos with incomplete data
+pr_qualifyingRepos <- pr_qualifyingRepos %>% filter(!repo_name %in% c("serversideup/docker-ssh", "labnol/react-tailwind", "synatic/noql"))
+```
+
+Casting and releveling event_time variable  
+```{r}
+pr_repos <- pr_qualifyingRepos %>%
+  mutate(event_time_factor = factor(event_time)) %>%
+  mutate(event_time_factor = relevel(event_time_factor, ref = "-1")) 
+```
+
+
+#### Modeling
+
+
+
+
+
+
+
+
+
+
+###
 
 
 Pulling subset of repos that (1) have at least 6 months of cursor usage; and (2) have a primary language of either typescript, javascript, or python
@@ -65,7 +149,7 @@ intervention_weeks <- its_qualifyingRepos %>%
   group_by(repo_name) %>%
   summarize(intervention_week = min(time))
 
-# Step 2: Join that back into your main dataset
+# Step 2: Join that back into the main dataset
 its_qualifyingRepos <- its_qualifyingRepos %>%
   left_join(intervention_weeks, by = "repo_name") %>%
   mutate(event_time = time - intervention_week)
