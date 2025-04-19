@@ -5,9 +5,10 @@ Script to analyze repositories cloned by clone_repos.py.
 This script:
 1. Reads repos.csv file and checks which repositories have been cloned
 2. Detects when cursor files were first introduced in each repository
-3. Collects a time series of weekly commit counts and lines added for each repository
+3. Collects a time series of weekly or monthly commit counts and lines added for each repository
 """
 
+import argparse
 import logging
 import multiprocessing
 import random
@@ -26,24 +27,42 @@ REPOS_CSV = Path(__file__).parent.parent / "data" / "repos.csv"
 CURSOR_FILES_CSV = Path(__file__).parent.parent / "data" / "cursor_files.csv"
 CURSOR_COMMITS_CSV = Path(__file__).parent.parent / "data" / "cursor_commits.csv"
 CLONE_DIR = Path(__file__).parent.parent.parent / "CursorRepos"
-OUTPUT_FILE = Path(__file__).parent.parent / "data" / "ts_repos.csv"
-CONTRIBUTOR_OUTPUT_FILE = Path(__file__).parent.parent / "data" / "ts_contributors.csv"
+OUTPUT_DIR = Path(__file__).parent.parent / "data"
 NUM_PROCESSES = multiprocessing.cpu_count() // 2
 REPO_TIMEOUT_SECONDS = 7200  # 2 hours timeout per repository
 
 
-def get_weekly_commit_stats(
+def get_time_key(commit_time: datetime, aggregation: str) -> str:
+    """
+    Get time key based on aggregation level.
+
+    Args:
+        commit_time (datetime): Commit timestamp
+        aggregation (str): Either 'week' or 'month'
+
+    Returns:
+        str: Formatted time key
+    """
+    if aggregation == "week":
+        return commit_time.strftime("%Y-W%W")
+    else:  # month
+        return commit_time.strftime("%Y-%m")
+
+
+def get_commit_stats(
     repo_path: Path,
+    aggregation: str,
 ) -> Tuple[Optional[Dict[str, Dict[str, int]]], Optional[List[Dict]]]:
     """
-    Get weekly commit counts and lines added for a repository.
+    Get weekly or monthly commit counts and lines added for a repository.
 
     Args:
         repo_path (Path): Path to the repository
+        aggregation (str): Either 'week' or 'month'
 
     Returns:
         Tuple containing:
-            1. dict: Dictionary with week as key (YYYY-WXX format) and dict of stats as value
+            1. dict: Dictionary with time period as key and dict of stats as value
                   or None if failed
             2. list: List of contributor-specific stats dictionaries
                   or None if failed
@@ -52,7 +71,7 @@ def get_weekly_commit_stats(
         repo = git.Repo(str(repo_path))
         repo_name = repo_path.name.replace("_", "/")
 
-        weekly_stats = defaultdict(
+        time_stats = defaultdict(
             lambda: {
                 "commits": 0,
                 "lines_added": 0,
@@ -63,35 +82,32 @@ def get_weekly_commit_stats(
         )
 
         contributor_stats = []
-
-        contributor_weekly_stats = defaultdict(
+        contributor_time_stats = defaultdict(
             lambda: defaultdict(lambda: {"commits": 0, "lines_added": 0})
         )
 
         for commit in repo.iter_commits():
             commit_time = datetime.fromtimestamp(commit.committed_date)
-            week_key = commit_time.strftime("%Y-W%W")
+            time_key = get_time_key(commit_time, aggregation)
             author_str = f"{commit.author.name} <{commit.author.email}>"
 
-            weekly_stats[week_key]["commits"] += 1
-            weekly_stats[week_key]["contributors"].add(author_str)
+            time_stats[time_key]["commits"] += 1
+            time_stats[time_key]["contributors"].add(author_str)
 
-            # Update latest commit if this is the first one seen this week or has a later timestamp
             if (
-                weekly_stats[week_key]["latest_commit_time"] is None
-                or commit_time > weekly_stats[week_key]["latest_commit_time"]
+                time_stats[time_key]["latest_commit_time"] is None
+                or commit_time > time_stats[time_key]["latest_commit_time"]
             ):
-                weekly_stats[week_key]["latest_commit"] = commit.hexsha
-                weekly_stats[week_key]["latest_commit_time"] = commit_time
+                time_stats[time_key]["latest_commit"] = commit.hexsha
+                time_stats[time_key]["latest_commit_time"] = commit_time
 
-            contributor_weekly_stats[week_key][author_str]["commits"] += 1
+            contributor_time_stats[time_key][author_str]["commits"] += 1
 
             try:
                 if commit.parents:
                     parent = commit.parents[0]
                     added_lines = 0
 
-                    # Use git CLI to get lines added as GitPython is not working
                     try:
                         cmd = [
                             "git",
@@ -105,26 +121,23 @@ def get_weekly_commit_stats(
                             cmd, capture_output=True, text=True, check=True
                         )
 
-                        # Parse the numstat output: each line has format "added deleted filename"
                         if result.stdout.strip():
                             for line in result.stdout.strip().split("\n"):
                                 if line.strip():
                                     parts = line.split()
-                                    if (
-                                        len(parts) >= 2 and parts[0] != "-"
-                                    ):  # Skip binary files (marked with -)
+                                    if len(parts) >= 2 and parts[0] != "-":
                                         try:
                                             added_lines += int(parts[0])
                                         except ValueError:
-                                            pass  # Skip if conversion fails
+                                            pass
 
                         logging.debug("%s: +%d lines", commit.hexsha[:8], added_lines)
                     except subprocess.SubprocessError as e:
                         logging.error("Diff failed for commit %s: %s", commit.hexsha, e)
                         continue
 
-                    weekly_stats[week_key]["lines_added"] += added_lines
-                    contributor_weekly_stats[week_key][author_str][
+                    time_stats[time_key]["lines_added"] += added_lines
+                    contributor_time_stats[time_key][author_str][
                         "lines_added"
                     ] += added_lines
             except Exception as e:
@@ -132,21 +145,21 @@ def get_weekly_commit_stats(
                 continue
 
         result = {}
-        for week, stats in weekly_stats.items():
-            result[week] = {
+        for time_key, stats in time_stats.items():
+            result[time_key] = {
                 "latest_commit": stats["latest_commit"],
                 "commits": stats["commits"],
                 "lines_added": stats["lines_added"],
                 "contributors": len(stats["contributors"]),
             }
 
-        for week, authors in contributor_weekly_stats.items():
+        for time_key, authors in contributor_time_stats.items():
             for author, stats in authors.items():
                 contributor_stats.append(
                     {
                         "repo_name": repo_name,
                         "author": author,
-                        "week": week,
+                        "time": time_key,
                         "commits": stats["commits"],
                         "lines_added": stats["lines_added"],
                     }
@@ -252,7 +265,11 @@ def find_cursor_file_commits(repo_path: Path, cursor_files: List[str]) -> List[D
 
 
 def process_repository(
-    idx: int, repo: Dict, repo_cursor_files: Dict[str, List[str]], total_repos: int
+    idx: int,
+    repo: Dict,
+    repo_cursor_files: Dict[str, List[str]],
+    total_repos: int,
+    aggregation: str,
 ) -> Tuple[List[Dict], Dict[str, str], List[Dict], List[Dict]]:
     """
     Process a single repository in a worker process.
@@ -262,10 +279,11 @@ def process_repository(
         repo: Repository data from the dataframe
         repo_cursor_files: Mapping of repo names to cursor files
         total_repos: Total number of repositories
+        aggregation: Either 'week' or 'month'
 
     Returns:
         Tuple of (repo_ts, adoption_date, contributor_ts, cursor_commits) where:
-            repo_ts: List of weekly statistics dictionaries
+            repo_ts: List of time period statistics dictionaries
             adoption_date: Dictionary mapping repo_name to cursor adoption date
             contributor_ts: List of contributor statistics dictionaries
             cursor_commits: List of commits modifying cursor files
@@ -289,18 +307,17 @@ def process_repository(
             adoption_date[repo_name] = introduction_date.isoformat()
             logging.info("Found cursor adoption date: %s", introduction_date)
 
-        # Find commits that modified cursor files
         cursor_commits = find_cursor_file_commits(repo_path, cursor_files)
         if cursor_commits:
             logging.info("Found %d commits modifying cursor files", len(cursor_commits))
 
-    weekly_stats, contributor_stats = get_weekly_commit_stats(repo_path)
+    weekly_stats, contributor_stats = get_commit_stats(repo_path, aggregation)
     if weekly_stats:
-        for week, stats in weekly_stats.items():
+        for time_key, stats in weekly_stats.items():
             repo_ts.append(
                 {
                     "repo_name": repo_name,
-                    "week": week,
+                    "time": time_key,
                     "latest_commit": stats["latest_commit"],
                     "commits": stats["commits"],
                     "lines_added": stats["lines_added"],
@@ -316,6 +333,17 @@ def process_repository(
 
 def main() -> None:
     """Main function to analyze repositories, get commit stats and cursor adoption dates."""
+    parser = argparse.ArgumentParser(
+        description="Analyze repository commit history with weekly or monthly aggregation."
+    )
+    parser.add_argument(
+        "--aggregation",
+        choices=["week", "month"],
+        default="week",
+        help="Aggregate data by week or month (default: week)",
+    )
+    args = parser.parse_args()
+
     logging.basicConfig(
         format="%(asctime)s [%(levelname)s] %(message)s",
         level=logging.INFO,
@@ -346,9 +374,10 @@ def main() -> None:
 
     total_repos = len(repos_df)
     args_list = [
-        (idx, repo, repo_cursor_files, total_repos) for idx, repo in repos_df.iterrows()
+        (idx, repo, repo_cursor_files, total_repos, args.aggregation)
+        for idx, repo in repos_df.iterrows()
     ]
-    random.shuffle(args_list)  # Hope to have equal load per process
+    random.shuffle(args_list)
 
     repo_ts = []
     contributor_ts = []
@@ -357,12 +386,10 @@ def main() -> None:
 
     logging.info("Starting multiprocessing pool with %d workers", NUM_PROCESSES)
     with multiprocessing.Pool(processes=NUM_PROCESSES) as pool:
-        # Create async results
         async_results = []
-        for args in args_list:
-            async_results.append(pool.apply_async(process_repository, args))
+        for process_args in args_list:
+            async_results.append(pool.apply_async(process_repository, process_args))
 
-        # Process results with timeout
         for idx, async_result in enumerate(async_results):
             repo_name = args_list[idx][1]["repo_name"]
             try:
@@ -387,17 +414,20 @@ def main() -> None:
 
     logging.info("Finished processing %d repos", total_repos)
 
+    # Set output paths based on aggregation level
+    output_suffix = "_monthly.csv" if args.aggregation == "month" else "_weekly.csv"
+    ts_output = OUTPUT_DIR / f"ts_repos{output_suffix}"
+    contributor_output = OUTPUT_DIR / f"ts_contributors{output_suffix}"
+
     if repo_ts:
         ts_df = pd.DataFrame(repo_ts)
-        ts_df.to_csv(OUTPUT_FILE, index=False)
-        logging.info("Saved time series data to %s", OUTPUT_FILE)
+        ts_df.to_csv(ts_output, index=False)
+        logging.info("Saved time series data to %s", ts_output)
 
     if contributor_ts:
         contributor_df = pd.DataFrame(contributor_ts)
-        contributor_df.to_csv(CONTRIBUTOR_OUTPUT_FILE, index=False)
-        logging.info(
-            "Saved contributor time series data to %s", CONTRIBUTOR_OUTPUT_FILE
-        )
+        contributor_df.to_csv(contributor_output, index=False)
+        logging.info("Saved contributor time series data to %s", contributor_output)
 
     if cursor_commits:
         cursor_commits_df = pd.DataFrame(cursor_commits)
