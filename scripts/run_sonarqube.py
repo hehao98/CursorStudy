@@ -33,12 +33,16 @@ SONAR_PATH = os.getenv("SONAR_SCANNER_PATH")
 SONAR_TOKEN = os.getenv("SONAR_TOKEN")
 SONAR_HOST = os.getenv("SONAR_HOST")
 
+# Time key in the time series dataframe
+TIME_KEY = None
+TIME_PERIODS_INTERVAL = None
+
 # Metrics to collect from SonarQube
 METRICS_OF_INTEREST = [
+    "ncloc",
     "bugs",
     "vulnerabilities",
     "code_smells",
-    "ncloc",
     "duplicated_lines_density",
     "comment_lines_density",
     "cognitive_complexity",
@@ -50,8 +54,9 @@ SCRIPT_DIR = Path(__file__).parent
 DATA_DIR = SCRIPT_DIR.parent / "data"
 CLONE_DIR = SCRIPT_DIR.parent.parent / "CursorRepos"
 REPOS_CSV = DATA_DIR / "repos.csv"  # Add path for repos data
-TIME_PERIODS_INTERVAL = None
-NUM_PROCESSES = 16  # Number of processes to use for parallel processing
+
+# Number of processes to use for parallel processing
+NUM_PROCESSES = 16
 
 # Taking too long to analyze plus no metrics are able to be collected
 REPO_IGNORE = ["meshery/meshery"]
@@ -310,15 +315,15 @@ def process_repository(
 
     # Filter time periods before and after adoption
     time_periods_in_range = sorted(
-        repo_df[(repo_df["time"] >= start_time) & (repo_df["time"] <= end_time)][
-            "time"
+        repo_df[(repo_df[TIME_KEY] >= start_time) & (repo_df[TIME_KEY] <= end_time)][
+            TIME_KEY
         ].unique()
     )
 
     # Process each time period's latest commit in chronological order
     for time_period in time_periods_in_range:
         # Get the index in the repository dataframe
-        row_idx = repo_df[repo_df["time"] == time_period].index[0]
+        row_idx = repo_df[repo_df[TIME_KEY] == time_period].index[0]
         commit_hash = repo_df.loc[row_idx, "latest_commit"]
 
         if not commit_hash:
@@ -340,7 +345,7 @@ def process_repository(
 
 def main() -> None:
     """Main function to run SonarQube analysis on repositories."""
-    global TIME_PERIODS_INTERVAL
+    global TIME_PERIODS_INTERVAL, TIME_KEY
     parser = argparse.ArgumentParser(
         description="Run SonarQube analysis on repository commits with weekly or monthly aggregation."
     )
@@ -351,6 +356,7 @@ def main() -> None:
         help="Aggregate data by week or month (default: week)",
     )
     args = parser.parse_args()
+    TIME_KEY = "week" if args.aggregation == "week" else "month"
     if args.aggregation == "week":
         TIME_PERIODS_INTERVAL = 30
     elif args.aggregation == "month":
@@ -394,13 +400,16 @@ def main() -> None:
         results = pool.starmap(process_repository, args_list, chunksize=1)
 
     updated_df = pd.concat(results)
+    updated_df.drop(columns=["technical_debt"], inplace=True)
     updated_df.rename(
         columns={
             "software_quality_maintainability_remediation_effort": "technical_debt"
         },
         inplace=True,
     )
-    updated_df.sort_values(by=["repo_name", "time"]).to_csv(ts_repos_file, index=False)
+    updated_df.sort_values(by=["repo_name", TIME_KEY]).to_csv(
+        ts_repos_file, index=False
+    )
     logging.info("Updated metrics saved to %s", ts_repos_file)
 
 
