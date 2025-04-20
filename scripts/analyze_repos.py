@@ -30,6 +30,7 @@ CLONE_DIR = Path(__file__).parent.parent.parent / "CursorRepos"
 OUTPUT_DIR = Path(__file__).parent.parent / "data"
 NUM_PROCESSES = multiprocessing.cpu_count() // 2
 REPO_TIMEOUT_SECONDS = 7200  # 2 hours timeout per repository
+TIME_KEY = None
 
 
 def get_time_key(commit_time: datetime, aggregation: str) -> str:
@@ -159,7 +160,7 @@ def get_commit_stats(
                     {
                         "repo_name": repo_name,
                         "author": author,
-                        "time": time_key,
+                        TIME_KEY: time_key,
                         "commits": stats["commits"],
                         "lines_added": stats["lines_added"],
                     }
@@ -317,7 +318,7 @@ def process_repository(
             repo_ts.append(
                 {
                     "repo_name": repo_name,
-                    "time": time_key,
+                    TIME_KEY: time_key,
                     "latest_commit": stats["latest_commit"],
                     "commits": stats["commits"],
                     "lines_added": stats["lines_added"],
@@ -333,6 +334,7 @@ def process_repository(
 
 def main() -> None:
     """Main function to analyze repositories, get commit stats and cursor adoption dates."""
+    global TIME_KEY
     parser = argparse.ArgumentParser(
         description="Analyze repository commit history with weekly or monthly aggregation."
     )
@@ -343,6 +345,7 @@ def main() -> None:
         help="Aggregate data by week or month (default: week)",
     )
     args = parser.parse_args()
+    TIME_KEY = args.aggregation
 
     logging.basicConfig(
         format="%(asctime)s [%(levelname)s] %(message)s",
