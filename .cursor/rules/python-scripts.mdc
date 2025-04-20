@@ -1,6 +1,6 @@
 ---
 description:
-globs: *.py
+globs: *.py,*ipynb
 alwaysApply: false
 ---
 For logging calls, use the built-in string formatting instead of f"".

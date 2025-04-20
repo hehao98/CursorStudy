@@ -1,0 +1,70 @@
+---
+title: "Cursor Adoption Time Analysis"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, fig.width = 5, fig.height = 3)
+```
+
+```{r}
+# Import necessary libraries
+library(tidyverse)
+library(lubridate)
+library(scales)
+
+# Set global ggplot theme - black axis lines, no grid
+theme_set(theme_minimal() +
+          theme(panel.grid = element_blank(),
+                axis.line = element_line(color = "black"),
+                axis.ticks = element_line(color = "black")))
+```
+
+## Data Loading and Exploration
+
+```{r}
+# Load the dataset
+data_path <- "../data/repos.csv"
+repos_df <- read_csv(data_path)
+
+# Display basic info
+print(glue::glue("Dataset shape: {nrow(repos_df)} rows x {ncol(repos_df)} columns"))
+
+# Convert datetime columns to R datetime format
+repos_df <- repos_df %>%
+    mutate(
+        repo_created = ymd_hms(repo_created),
+        repo_updated = ymd_hms(repo_updated),
+        repo_cursor_adoption = ymd_hms(repo_cursor_adoption),
+        adoption_yearmonth = format(repo_cursor_adoption, "%Y-%m")
+    ) %>%
+    filter(!is.na(repo_cursor_adoption))
+
+# View data structure
+glimpse(repos_df)
+```
+
+## Distribution of Cursor Adoption Time
+
+```{r}
+# Plot cursor adoption over time (by year-month) with bar chart and numbers on top
+adoption_counts <- repos_df %>%
+    count(adoption_yearmonth) %>%
+    arrange(adoption_yearmonth)
+
+p <- ggplot(adoption_counts, aes(x = adoption_yearmonth, y = n)) +
+    geom_bar(stat = "identity", fill = "steelblue") +
+    geom_text(aes(label = n), vjust = -0.5, size = 3) +
+    labs(
+        #title = "Cursor Adoption Over Time",
+        x = "Year-Month",
+        y = "Number of Repositories"
+    ) +
+    scale_y_continuous(expand = c(0, 0)) +
+    coord_cartesian(ylim = c(0, 330), clip = "off") +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+print(p)
+
+ggsave("../plots/cursor_adoption_time.pdf", plot = p, width = 5, height = 3)
+```
