@@ -35,7 +35,9 @@ SONAR_HOST = os.getenv("SONAR_HOST")
 
 # Time key in the time series dataframe
 TIME_KEY = None
-TIME_PERIODS_INTERVAL = None
+
+# Fixed start date for data collection, 2024-01-01 determined by adoption time analysis
+START_DATE = "2024-01-01"
 
 # Metrics to collect from SonarQube
 METRICS_OF_INTEREST = [
@@ -276,53 +278,29 @@ def process_repository(
     Returns:
         pd.DataFrame: Updated time series dataframe for this repository
     """
+    # Setup repository info and data
     project_key = repo_name.replace("/", "_")
-    repo_path = CLONE_DIR / repo_name.replace("/", "_")
+    repo_path = CLONE_DIR / project_key
     if not repo_path.exists():
         logging.warning("Repository %s not found at %s", repo_name, repo_path)
         return ts_df[ts_df["repo_name"] == repo_name]
 
-    # Get adoption time from repos data
-    repo_info = repos_df[repos_df["repo_name"] == repo_name]
-    if repo_info.empty or pd.isna(repo_info["repo_cursor_adoption"].iloc[0]):
-        logging.warning("No adoption found for %s, skipping", repo_name)
-        return ts_df[ts_df["repo_name"] == repo_name]
-
-    adoption = repo_info["repo_cursor_adoption"].iloc[0]
-
-    # Determine date range based on aggregation
-    if aggregation == "week":
-        start_time = (adoption - pd.Timedelta(weeks=TIME_PERIODS_INTERVAL)).strftime(
-            "%Y-W%W"
-        )
-        end_time = (adoption + pd.Timedelta(weeks=TIME_PERIODS_INTERVAL)).strftime(
-            "%Y-W%W"
-        )
-    else:  # month
-        start_month = pd.Timestamp(adoption.year, adoption.month, 1) - pd.DateOffset(
-            months=TIME_PERIODS_INTERVAL
-        )
-        end_month = pd.Timestamp(adoption.year, adoption.month, 1) + pd.DateOffset(
-            months=TIME_PERIODS_INTERVAL
-        )
-        start_time = start_month.strftime("%Y-%m")
-        end_time = end_month.strftime("%Y-%m")
-
-    logging.info("Processing %s from %s to %s", repo_name, start_time, end_time)
-
     # Get repository data
     repo_df = ts_df[ts_df["repo_name"] == repo_name].copy()
 
-    # Filter time periods before and after adoption
-    time_periods_in_range = sorted(
-        repo_df[(repo_df[TIME_KEY] >= start_time) & (repo_df[TIME_KEY] <= end_time)][
-            TIME_KEY
-        ].unique()
-    )
+    # Use single date format string based on aggregation
+    date_format = "%Y-W%W" if aggregation == "week" else "%Y-%m"
+
+    # Get start and end times using the same format
+    start_time = pd.Timestamp(START_DATE).strftime(date_format)
+    end_time = pd.Timestamp.now().strftime(date_format)
+
+    logging.info("Processing %s from %s to %s", repo_name, start_time, end_time)
 
     # Process each time period's latest commit in chronological order
-    for time_period in time_periods_in_range:
-        # Get the index in the repository dataframe
+    for time_period in sorted(
+        repo_df[repo_df[TIME_KEY] >= start_time][TIME_KEY].unique()
+    ):
         row_idx = repo_df[repo_df[TIME_KEY] == time_period].index[0]
         commit_hash = repo_df.loc[row_idx, "latest_commit"]
 
@@ -334,18 +312,18 @@ def process_repository(
             logging.info("%s at %s (%s)", repo_name, time_period, commit_hash[:8])
             run_sonar_scan(repo_path, commit_hash, time_period, project_key)
 
-        metrics = get_sonar_metrics(project_key, time_period)
-        if metrics:
+        # Get and store metrics
+        if metrics := get_sonar_metrics(project_key, time_period):
             for metric, value in metrics.items():
                 repo_df.loc[row_idx, metric] = value
-        logging.info("Metrics for %s at %s: %s", repo_name, time_period, metrics)
+            logging.info("Metrics for %s at %s: %s", repo_name, time_period, metrics)
 
     return repo_df
 
 
 def main() -> None:
     """Main function to run SonarQube analysis on repositories."""
-    global TIME_PERIODS_INTERVAL, TIME_KEY
+    global TIME_KEY
     parser = argparse.ArgumentParser(
         description="Run SonarQube analysis on repository commits with weekly or monthly aggregation."
     )
@@ -357,10 +335,6 @@ def main() -> None:
     )
     args = parser.parse_args()
     TIME_KEY = "week" if args.aggregation == "week" else "month"
-    if args.aggregation == "week":
-        TIME_PERIODS_INTERVAL = 30
-    elif args.aggregation == "month":
-        TIME_PERIODS_INTERVAL = 6
 
     logging.basicConfig(
         format="%(asctime)s [%(levelname)s] %(message)s",
