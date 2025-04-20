@@ -1,13 +1,17 @@
 #!/usr/bin/env python3
 """
-Script to run SonarQube scanner on the latest commits of each week.
+Script to run SonarQube scanner on the latest commits of each week or month.
 
 This script:
-1. Reads the weekly repository stats from ts_repos.csv
-2. For each repository and week, runs SonarQube scanner on the latest commit
+1. Reads the time series repository stats from ts_repos_weekly.csv or ts_repos_monthly.csv
+2. For each repository and time period, runs SonarQube scanner on the latest commit
 3. Collects and stores the analysis results
+
+NOTE: Sometimes the analysis results are not immediately available in database,
+so you may have to run this script twice in order to fetch all available metrics
 """
 
+import argparse
 import logging
 import multiprocessing as mp
 import os
@@ -45,9 +49,8 @@ METRICS_OF_INTEREST = [
 SCRIPT_DIR = Path(__file__).parent
 DATA_DIR = SCRIPT_DIR.parent / "data"
 CLONE_DIR = SCRIPT_DIR.parent.parent / "CursorRepos"
-TS_REPOS_CSV = DATA_DIR / "ts_repos.csv"
 REPOS_CSV = DATA_DIR / "repos.csv"  # Add path for repos data
-WEEKS_INTERVAL = 30  # It may be too costly to analyze all weeks
+TIME_PERIODS_INTERVAL = None
 NUM_PROCESSES = 16  # Number of processes to use for parallel processing
 
 # Taking too long to analyze plus no metrics are able to be collected
@@ -199,6 +202,8 @@ def get_sonar_metrics(project_key: str, version: str) -> Optional[Dict]:
 
             data = response.json()
 
+            logging.info("Found %d analyses for %s", len(data["analyses"]), project_key)
+
             # Find the analysis with matching version to get its date
             if "analyses" in data and data["analyses"]:
                 for analysis in data["analyses"]:
@@ -252,7 +257,7 @@ def get_sonar_metrics(project_key: str, version: str) -> Optional[Dict]:
 
 
 def process_repository(
-    ts_df: pd.DataFrame, repos_df: pd.DataFrame, repo_name: str
+    ts_df: pd.DataFrame, repos_df: pd.DataFrame, repo_name: str, aggregation: str
 ) -> pd.DataFrame:
     """
     Process a single repository's analysis.
@@ -261,6 +266,7 @@ def process_repository(
         ts_df: Time series dataframe
         repos_df: Repository information dataframe
         repo_name: Name of the repository to process
+        aggregation: Either 'week' or 'month'
 
     Returns:
         pd.DataFrame: Updated time series dataframe for this repository
@@ -271,52 +277,85 @@ def process_repository(
         logging.warning("Repository %s not found at %s", repo_name, repo_path)
         return ts_df[ts_df["repo_name"] == repo_name]
 
-    # Get adoption week from repos data
+    # Get adoption time from repos data
     repo_info = repos_df[repos_df["repo_name"] == repo_name]
     if repo_info.empty or pd.isna(repo_info["repo_cursor_adoption"].iloc[0]):
         logging.warning("No adoption found for %s, skipping", repo_name)
         return ts_df[ts_df["repo_name"] == repo_name]
 
     adoption = repo_info["repo_cursor_adoption"].iloc[0]
-    start_week = (adoption - pd.Timedelta(weeks=WEEKS_INTERVAL)).strftime("%Y-W%W")
-    end_week = (adoption + pd.Timedelta(weeks=WEEKS_INTERVAL)).strftime("%Y-W%W")
-    logging.info("Processing %s from %s to %s", repo_name, start_week, end_week)
+
+    # Determine date range based on aggregation
+    if aggregation == "week":
+        start_time = (adoption - pd.Timedelta(weeks=TIME_PERIODS_INTERVAL)).strftime(
+            "%Y-W%W"
+        )
+        end_time = (adoption + pd.Timedelta(weeks=TIME_PERIODS_INTERVAL)).strftime(
+            "%Y-W%W"
+        )
+    else:  # month
+        start_month = pd.Timestamp(adoption.year, adoption.month, 1) - pd.DateOffset(
+            months=TIME_PERIODS_INTERVAL
+        )
+        end_month = pd.Timestamp(adoption.year, adoption.month, 1) + pd.DateOffset(
+            months=TIME_PERIODS_INTERVAL
+        )
+        start_time = start_month.strftime("%Y-%m")
+        end_time = end_month.strftime("%Y-%m")
+
+    logging.info("Processing %s from %s to %s", repo_name, start_time, end_time)
 
     # Get repository data
     repo_df = ts_df[ts_df["repo_name"] == repo_name].copy()
 
-    # Filter weeks before and after adoption
-    weeks_in_range = sorted(
-        repo_df[(repo_df["week"] >= start_week) & (repo_df["week"] <= end_week)][
-            "week"
+    # Filter time periods before and after adoption
+    time_periods_in_range = sorted(
+        repo_df[(repo_df["time"] >= start_time) & (repo_df["time"] <= end_time)][
+            "time"
         ].unique()
     )
 
-    # Process each week's latest commit in chronological order
-    for week in weeks_in_range:
+    # Process each time period's latest commit in chronological order
+    for time_period in time_periods_in_range:
         # Get the index in the repository dataframe
-        row_idx = repo_df[repo_df["week"] == week].index[0]
+        row_idx = repo_df[repo_df["time"] == time_period].index[0]
         commit_hash = repo_df.loc[row_idx, "latest_commit"]
 
         if not commit_hash:
-            logging.warning("No commit hash for %s at %s", repo_name, week)
+            logging.warning("No commit hash for %s at %s", repo_name, time_period)
             continue
 
-        if not check_analysis_exists(project_key, week):
-            logging.info("%s at %s (%s)", repo_name, week, commit_hash[:8])
-            run_sonar_scan(repo_path, commit_hash, week, project_key)
+        if not check_analysis_exists(project_key, time_period):
+            logging.info("%s at %s (%s)", repo_name, time_period, commit_hash[:8])
+            run_sonar_scan(repo_path, commit_hash, time_period, project_key)
 
-        metrics = get_sonar_metrics(project_key, week)
+        metrics = get_sonar_metrics(project_key, time_period)
         if metrics:
             for metric, value in metrics.items():
                 repo_df.loc[row_idx, metric] = value
-        logging.info("Metrics for %s at %s: %s", repo_name, week, metrics)
+        logging.info("Metrics for %s at %s: %s", repo_name, time_period, metrics)
 
     return repo_df
 
 
 def main() -> None:
     """Main function to run SonarQube analysis on repositories."""
+    global TIME_PERIODS_INTERVAL
+    parser = argparse.ArgumentParser(
+        description="Run SonarQube analysis on repository commits with weekly or monthly aggregation."
+    )
+    parser.add_argument(
+        "--aggregation",
+        choices=["week", "month"],
+        default="week",
+        help="Aggregate data by week or month (default: week)",
+    )
+    args = parser.parse_args()
+    if args.aggregation == "week":
+        TIME_PERIODS_INTERVAL = 30
+    elif args.aggregation == "month":
+        TIME_PERIODS_INTERVAL = 6
+
     logging.basicConfig(
         format="%(asctime)s [%(levelname)s] %(message)s",
         level=logging.INFO,
@@ -327,9 +366,16 @@ def main() -> None:
         logging.error("SONAR_PATH and SONAR_TOKEN must be set in .env file")
         return
 
+    # Set input file path based on aggregation level
+    ts_repos_file = DATA_DIR / f"ts_repos_{args.aggregation}ly.csv"
+
     # Read repository time series data and adoption data
-    ts_df = pd.read_csv(TS_REPOS_CSV)
-    repos_df = pd.read_csv(REPOS_CSV)
+    try:
+        ts_df = pd.read_csv(ts_repos_file)
+        repos_df = pd.read_csv(REPOS_CSV)
+    except FileNotFoundError as e:
+        logging.error(f"Required file not found: {e}")
+        return
 
     # Convert cursor_adoption_week to datetime
     repos_df["repo_cursor_adoption"] = pd.to_datetime(repos_df["repo_cursor_adoption"])
@@ -342,8 +388,10 @@ def main() -> None:
     # Get unique repository names
     repo_names = set(ts_df["repo_name"].unique()) - set(REPO_IGNORE)
     with mp.Pool(NUM_PROCESSES) as pool:
-        args = [(ts_df, repos_df, repo_name) for repo_name in repo_names]
-        results = pool.starmap(process_repository, args, chunksize=1)
+        args_list = [
+            (ts_df, repos_df, repo_name, args.aggregation) for repo_name in repo_names
+        ]
+        results = pool.starmap(process_repository, args_list, chunksize=1)
 
     updated_df = pd.concat(results)
     updated_df.rename(
@@ -352,8 +400,8 @@ def main() -> None:
         },
         inplace=True,
     )
-    updated_df.sort_values(by=["repo_name", "week"]).to_csv(TS_REPOS_CSV, index=False)
-    logging.info("Updated metrics saved to %s", TS_REPOS_CSV)
+    updated_df.sort_values(by=["repo_name", "time"]).to_csv(ts_repos_file, index=False)
+    logging.info("Updated metrics saved to %s", ts_repos_file)
 
 
 if __name__ == "__main__":
