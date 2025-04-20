@@ -15,6 +15,9 @@ jupyterlab = "^4.3.6"
 PyGithub = "^2.1.1"
 python-dotenv = "^1.0.0"
 gitpython = "^3.1.44"
+db-dtypes = "^1.4.2"
+google-cloud-bigquery = "^3.31.0"
+google-cloud-bigquery-storage = "^2.30.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.4.0"
