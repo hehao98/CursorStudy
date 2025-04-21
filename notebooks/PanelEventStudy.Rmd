@@ -83,7 +83,7 @@ modelsummary(did_models,
 ```
 ## Panel Event Study Models
 
-```{r panel_event_study, fig.width=10, fig.height=4}
+```{r panel_event_study, fig.width=12, fig.height=4}
 # Function to fit event study model
 fit_event_study <- function(outcome_var, data) {
     formula_str <- paste0(
@@ -108,11 +108,14 @@ event_models <- list(
 get_event_data <- function(model, outcome_name) {
     coefs <- coef(model)
     ci <- confint(model)
+    pvals <- summary(model)$coeftable[, 4]
 
     time_periods <- c(-6:-1, 1:6)
     estimates <- numeric(length(time_periods))
     conf_low <- numeric(length(time_periods))
     conf_high <- numeric(length(time_periods))
+    p_values <- numeric(length(time_periods))
+    is_significant <- logical(length(time_periods))
 
     for (i in seq_along(time_periods)) {
         t <- time_periods[i]
@@ -121,6 +124,10 @@ get_event_data <- function(model, outcome_name) {
         estimates[i] <- coefs[var_name]
         conf_low[i] <- ci[var_name, 1]
         conf_high[i] <- ci[var_name, 2]
+        p_values[i] <- pvals[var_name]
+
+        # Determine significance (p < 0.05)
+        is_significant[i] <- p_values[i] < 0.05
     }
 
     data.frame(
@@ -128,6 +135,8 @@ get_event_data <- function(model, outcome_name) {
         estimate = estimates,
         conf.low = conf_low,
         conf.high = conf_high,
+        p_value = p_values,
+        is_significant = is_significant,
         outcome = outcome_name
     )
 }
@@ -141,7 +150,9 @@ plot_data <- rbind(
 
 # Plot all outcomes
 ggplot(plot_data, aes(x = time, y = estimate, color = outcome)) +
-    geom_point(position = position_dodge(width = 0.3)) +
+    # Use different shapes based on significance
+    geom_point(aes(shape = is_significant), size = 3, position = position_dodge(width = 0.3)) +
+    scale_shape_manual(values = c("FALSE" = 1, "TRUE" = 16)) +  # 1=hollow circle, 16=filled circle
     geom_errorbar(aes(ymin = conf.low, ymax = conf.high),
         width = 0.2,
         position = position_dodge(width = 0.3)
@@ -153,8 +164,12 @@ ggplot(plot_data, aes(x = time, y = estimate, color = outcome)) +
         title = "Event Study: Effects of Cursor Adoption",
         x = "Months Relative to Adoption",
         y = "Coefficient Estimate",
-        color = "Outcome"
+        color = "Outcome",
+        shape = "Significant (p<0.05)"
     ) +
     theme_minimal() +
-    theme(legend.position = "none")
+    theme(
+        legend.position = "bottom",
+        legend.box = "horizontal"
+    )
 ```
