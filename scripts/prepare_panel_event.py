@@ -151,11 +151,17 @@ def generate_lead_lag_indicators(
     result_df["time"] = result_df[time_col]
 
     # Generate lead and lag indicators
-    for lead in LEAD_PERIODS:
+    for lead in LEAD_PERIODS[:-1]:
         result_df[f"lead_{lead}"] = (result_df["time_to_event"] == -lead).astype(int)
+    result_df[f"lead_{LEAD_PERIODS[-1]}"] = (
+        result_df["time_to_event"] <= -LEAD_PERIODS[-1]
+    ).astype(int)
 
-    for lag in LAG_PERIODS:
+    for lag in LAG_PERIODS[:-1]:
         result_df[f"lag_{lag}"] = (result_df["time_to_event"] == lag).astype(int)
+    result_df[f"lag_{LAG_PERIODS[-1]}"] = (
+        result_df["time_to_event"] >= LAG_PERIODS[-1]
+    ).astype(int)
 
     return result_df.drop(columns=["time_dt"])
 

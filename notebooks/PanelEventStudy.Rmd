@@ -1,0 +1,160 @@
+---
+title: "The Impact of Cursor Adoption on Velocity and Quality"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+## Loading Required Packages
+
+```{r load_packages}
+library(fixest)
+library(tidyverse)
+library(ggplot2)
+library(data.table)
+library(modelsummary)
+```
+
+## Loading and Preparing the Data
+
+```{r load_data}
+panel_data <- fread("../data/panel_event_monthly.csv")
+
+panel_data$repo_name <- as.factor(panel_data$repo_name)
+panel_data$time <- as.factor(panel_data$time)
+
+glimpse(panel_data)
+```
+
+## Base DiD Model
+
+```{r base_did_model}
+fit_did_model <- function(outcome_var, data) {
+    formula_str <- paste0(
+        outcome_var, " ~ post_event + log(ncloc + 1) +
+    log(contributors + 1) + log(stars + 1) +
+    log(issues + 1) + log(issue_comments + 1) | repo_name + time"
+    )
+
+    model <- feols(as.formula(formula_str), data = data)
+    return(model)
+}
+
+fit_multiple_did_models <- function(outcome_vars, data) {
+    models_list <- list()
+
+    for (outcome in names(outcome_vars)) {
+        models_list[[outcome_vars[outcome]]] <- fit_did_model(outcome, data)
+    }
+
+    return(models_list)
+}
+
+outcome_variables <- c(
+    "log(commits + 1)" = "Commits",
+    "log(lines_added + 1)" = "Lines Added",
+    "log(code_smells + vulnerabilities + bugs + 1)" = "Code Smells",
+    #"log(vulnerabilities + 1)" = "Vulnerabilities",
+    #"log(bugs + 1)" = "Bugs",
+    "duplicated_lines_density" = "Duplicated Lines",
+    "log(cognitive_complexity + 1)" = "Cognitive Complexity"
+)
+
+did_models <- fit_multiple_did_models(outcome_variables, panel_data)
+
+modelsummary(did_models,
+    title = "Impact of Cursor Adoption on Development Metrics",
+    stars = TRUE,
+    gof_omit = "AIC|BIC|RMSE|FE|R2 Within Adj.|(R2$)|Std",
+    coef_map = c(
+        "post_event" = "Post Cursor Adoption",
+        "log(ncloc + 1)" = "Log Lines of Code",
+        "log(contributors + 1)" = "Log Contributors",
+        "log(stars + 1)" = "Log Stars",
+        "log(issues + 1)" = "Log Issues",
+        "log(issue_comments + 1)" = "Log Issue Comments"
+    ),
+    fmt = 3,
+    estimate = "{estimate}{stars}"
+
+)
+```
+## Panel Event Study Models
+
+```{r panel_event_study, fig.width=10, fig.height=4}
+# Function to fit event study model
+fit_event_study <- function(outcome_var, data) {
+    formula_str <- paste0(
+        outcome_var, " ~ lead_6 + lead_5 + lead_4 + lead_3 + lead_2 +
+        lag_0 + lag_1 + lag_2 + lag_3 + lag_4 + lag_5 + lag_6 +
+        log(ncloc + 1) + log(contributors + 1) + log(stars + 1) +
+        log(issues + 1) + log(issue_comments + 1) | repo_name + time"
+    )
+
+    model <- feols(as.formula(formula_str), data = data)
+    return(model)
+}
+
+# Fit models for each outcome
+event_models <- list(
+    commits = fit_event_study("log(commits + 1)", panel_data),
+    lines = fit_event_study("log(lines_added + 1)", panel_data),
+    complexity = fit_event_study("log(cognitive_complexity + 1)", panel_data)
+)
+
+# Function to extract coefficients and CIs
+get_event_data <- function(model, outcome_name) {
+    coefs <- coef(model)
+    ci <- confint(model)
+
+    time_periods <- c(-6:-1, 1:6)
+    estimates <- numeric(length(time_periods))
+    conf_low <- numeric(length(time_periods))
+    conf_high <- numeric(length(time_periods))
+
+    for (i in seq_along(time_periods)) {
+        t <- time_periods[i]
+        var_name <- if (t < 0) paste0("lead_", abs(t)) else paste0("lag_", t)
+
+        estimates[i] <- coefs[var_name]
+        conf_low[i] <- ci[var_name, 1]
+        conf_high[i] <- ci[var_name, 2]
+    }
+
+    data.frame(
+        time = time_periods,
+        estimate = estimates,
+        conf.low = conf_low,
+        conf.high = conf_high,
+        outcome = outcome_name
+    )
+}
+
+# Combine all results
+plot_data <- rbind(
+    get_event_data(event_models$commits, "Commits"),
+    get_event_data(event_models$lines, "Lines Added"),
+    get_event_data(event_models$complexity, "Cognitive Complexity")
+)
+
+# Plot all outcomes
+ggplot(plot_data, aes(x = time, y = estimate, color = outcome)) +
+    geom_point(position = position_dodge(width = 0.3)) +
+    geom_errorbar(aes(ymin = conf.low, ymax = conf.high),
+        width = 0.2,
+        position = position_dodge(width = 0.3)
+    ) +
+    geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+    geom_vline(xintercept = 0, linetype = "dashed", color = "blue") +
+    facet_wrap(~outcome, scales = "free_y") +
+    labs(
+        title = "Event Study: Effects of Cursor Adoption",
+        x = "Months Relative to Adoption",
+        y = "Coefficient Estimate",
+        color = "Outcome"
+    ) +
+    theme_minimal() +
+    theme(legend.position = "none")
+```
