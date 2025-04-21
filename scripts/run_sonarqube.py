@@ -58,10 +58,10 @@ CLONE_DIR = SCRIPT_DIR.parent.parent / "CursorRepos"
 REPOS_CSV = DATA_DIR / "repos.csv"  # Add path for repos data
 
 # Number of processes to use for parallel processing
-NUM_PROCESSES = 16
+NUM_PROCESSES = 8  # if too much may crash Elastic Search
 
 # Taking too long to analyze plus no metrics are able to be collected
-REPO_IGNORE = ["meshery/meshery"]
+REPO_IGNORE = ["meshery/meshery"]  # "dotCMS/core"]
 
 
 def check_analysis_exists(project_key: str, version: str) -> bool:
