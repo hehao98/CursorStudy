@@ -33,7 +33,7 @@ glimpse(panel_data)
 ```{r base_did_model}
 fit_did_model <- function(outcome_var, data) {
     formula_str <- paste0(
-        outcome_var, " ~ post_event + log(ncloc + 1) +
+        outcome_var, " ~ post_event + log(ncloc + 1) + log(age + 1) +
     log(contributors + 1) + log(stars + 1) +
     log(issues + 1) + log(issue_comments + 1) | repo_name + time"
     )
@@ -55,9 +55,10 @@ fit_multiple_did_models <- function(outcome_vars, data) {
 outcome_variables <- c(
     "log(commits + 1)" = "Commits",
     "log(lines_added + 1)" = "Lines Added",
-    "log(code_smells + vulnerabilities + bugs + 1)" = "Code Smells",
-    #"log(vulnerabilities + 1)" = "Vulnerabilities",
-    #"log(bugs + 1)" = "Bugs",
+    "log(code_smells + 1)" = "Code Smells",
+    "log(vulnerabilities + 1)" = "Vulnerabilities",
+    "log(bugs + 1)" = "Bugs",
+    "comment_lines_density" = "Comment Lines Density",
     "duplicated_lines_density" = "Duplicated Lines",
     "log(cognitive_complexity + 1)" = "Cognitive Complexity"
 )
@@ -71,6 +72,7 @@ modelsummary(did_models,
     coef_map = c(
         "post_event" = "Post Cursor Adoption",
         "log(ncloc + 1)" = "Log Lines of Code",
+        "log(age + 1)" = "Log Age (days)",
         "log(contributors + 1)" = "Log Contributors",
         "log(stars + 1)" = "Log Stars",
         "log(issues + 1)" = "Log Issues",
@@ -78,18 +80,17 @@ modelsummary(did_models,
     ),
     fmt = 3,
     estimate = "{estimate}{stars}"
-
 )
 ```
 ## Panel Event Study Models
 
-```{r panel_event_study, fig.width=12, fig.height=4}
+```{r panel_event_study, fig.width=12, fig.height=8}
 # Function to fit event study model
 fit_event_study <- function(outcome_var, data) {
     formula_str <- paste0(
         outcome_var, " ~ lead_6 + lead_5 + lead_4 + lead_3 + lead_2 +
         lag_0 + lag_1 + lag_2 + lag_3 + lag_4 + lag_5 + lag_6 +
-        log(ncloc + 1) + log(contributors + 1) + log(stars + 1) +
+        log(ncloc + 1) + log(age + 1) + log(contributors + 1) + log(stars + 1) +
         log(issues + 1) + log(issue_comments + 1) | repo_name + time"
     )
 
@@ -101,7 +102,8 @@ fit_event_study <- function(outcome_var, data) {
 event_models <- list(
     commits = fit_event_study("log(commits + 1)", panel_data),
     lines = fit_event_study("log(lines_added + 1)", panel_data),
-    complexity = fit_event_study("log(cognitive_complexity + 1)", panel_data)
+    complexity = fit_event_study("log(cognitive_complexity + 1)", panel_data),
+    code_smells = fit_event_study("log(code_smells + 1)", panel_data)
 )
 
 # Function to extract coefficients and CIs
@@ -145,14 +147,15 @@ get_event_data <- function(model, outcome_name) {
 plot_data <- rbind(
     get_event_data(event_models$commits, "Commits"),
     get_event_data(event_models$lines, "Lines Added"),
-    get_event_data(event_models$complexity, "Cognitive Complexity")
+    get_event_data(event_models$complexity, "Cognitive Complexity"),
+    get_event_data(event_models$code_smells, "Code Smells")
 )
 
 # Plot all outcomes
 ggplot(plot_data, aes(x = time, y = estimate, color = outcome)) +
     # Use different shapes based on significance
     geom_point(aes(shape = is_significant), size = 3, position = position_dodge(width = 0.3)) +
-    scale_shape_manual(values = c("FALSE" = 1, "TRUE" = 16)) +  # 1=hollow circle, 16=filled circle
+    scale_shape_manual(values = c("FALSE" = 1, "TRUE" = 16)) + # 1=hollow circle, 16=filled circle
     geom_errorbar(aes(ymin = conf.low, ymax = conf.high),
         width = 0.2,
         position = position_dodge(width = 0.3)

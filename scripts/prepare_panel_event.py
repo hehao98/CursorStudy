@@ -243,6 +243,23 @@ def prepare_panel_data(aggregation: str) -> pd.DataFrame:
     post_end_filter_count = len(panel_df)
     rows_filtered_end = post_start_filter_count - post_end_filter_count
 
+    # Add repository age in days
+    logging.info("Calculating repository age in days")
+    repo_creation_dates = dict(
+        zip(
+            pd.read_csv(REPOS_CSV)["repo_name"],
+            pd.to_datetime(pd.read_csv(REPOS_CSV)["repo_created"]).dt.tz_localize(None),
+        )
+    )
+    panel_df["age"] = panel_df.apply(
+        lambda row: (
+            (row["filter_date"] - repo_creation_dates.get(row["repo_name"])).days
+            if row["repo_name"] in repo_creation_dates
+            else None
+        ),
+        axis=1,
+    )
+
     # Drop the filtering column
     panel_df = panel_df.drop(columns=["filter_date"])
 
@@ -273,6 +290,14 @@ def prepare_panel_data(aggregation: str) -> pd.DataFrame:
     panel_df = panel_df[
         ["repo_name", aggregation, "time"] + event_columns + other_columns
     ]
+
+    # Move age to come right after lines_added
+    cols = panel_df.columns.tolist()
+    if "age" in cols and "lines_added" in cols:
+        lines_added_idx = cols.index("lines_added")
+        cols.remove("age")
+        cols.insert(lines_added_idx + 1, "age")
+        panel_df = panel_df[cols]
 
     return panel_df
 
