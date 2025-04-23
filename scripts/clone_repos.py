@@ -7,6 +7,7 @@ stars into the ../CursorRepos folder. It implements proper logging and error han
 for the cloning process.
 """
 
+import argparse
 import logging
 import subprocess
 import sys
@@ -17,7 +18,9 @@ import pandas as pd
 
 # Constants
 REPOS_CSV = Path(__file__).parent.parent / "data" / "repos.csv"
+CONTROL_REPOS_CSV = Path(__file__).parent.parent / "data" / "matching.csv"
 CLONE_DIR = Path(__file__).parent.parent.parent / "CursorRepos"
+CONTROL_CLONE_DIR = Path(__file__).parent.parent.parent / "ControlRepos"
 MIN_STARS = 10
 
 
@@ -164,20 +167,39 @@ def main():
         handlers=[logging.StreamHandler(sys.stdout)],
     )
 
+    parser = argparse.ArgumentParser(description="Clone repositories from CSV file.")
+    parser.add_argument(
+        "--control",
+        action="store_true",
+        help="Clone control repositories instead of treatment repositories",
+    )
+    args = parser.parse_args()
+
     # Ensure clone directory exists
     ensure_dir(CLONE_DIR)
+    ensure_dir(CONTROL_CLONE_DIR)
 
-    # Read the CSV file
-    try:
-        df = pd.read_csv(REPOS_CSV)
-        logging.info("Successfully read %d repositories from %s", len(df), REPOS_CSV)
-    except Exception as e:
-        logging.error("Failed to read CSV file: %s", str(e))
-        return
+    if not args.control:
+        # Read the CSV file
+        try:
+            df = pd.read_csv(REPOS_CSV)
+            logging.info("%d repos from %s", len(df), REPOS_CSV)
+        except Exception as e:
+            logging.error("Failed to read CSV file: %s", str(e))
+            return
 
-    # Filter repositories with 10 or more stars
-    repos_to_clone = df[df["repo_stars"] >= MIN_STARS]
-    logging.info("Found %d repositories with %d+ stars", len(repos_to_clone), MIN_STARS)
+        # Filter repositories with 10 or more stars
+        repos_to_clone = df[df["repo_stars"] >= MIN_STARS]
+        logging.info("Found %d repos with %d+ stars", len(repos_to_clone), MIN_STARS)
+    else:
+        try:
+            df = pd.read_csv(CONTROL_REPOS_CSV)
+            logging.info("%d controls from %s", len(df), CONTROL_REPOS_CSV)
+        except Exception as e:
+            logging.error("Failed to read CSV file: %s", str(e))
+            return
+
+        raise NotImplementedError("Control repositories not implemented yet")
 
     # Clone repositories
     success_count = 0

@@ -15,10 +15,68 @@ from sklearn.preprocessing import StandardScaler
 # Global variables for file paths
 REPOS_FILE = Path(__file__).parent.parent / "data" / "repos.csv"
 EVENTS_FILE = Path(__file__).parent.parent / "data" / "repo_events.csv"
-MATCHING_FILE = Path(__file__).parent.parent / "data" / "matching_{}.csv"
+MATCHING_FILE = Path(__file__).parent.parent / "data" / "matching.csv"
 CONTROL_REPOS_DIR = Path(__file__).parent.parent / "data"
 EARLIEST_CONTROL_MONTH = "202408"
 MAX_CONTROL_REPOS = 10000
+
+# Global cache for repository languages
+REPO_LANGUAGE_CACHE = {}
+
+
+def get_github_token():
+    """
+    Retrieve GitHub token from environment variables.
+
+    Returns:
+        str: GitHub token
+
+    Raises:
+        ValueError: If no token is found
+    """
+    # Load environment variables from .env file
+    load_dotenv(override=True)
+    token = os.getenv("GITHUB_TOKEN")
+
+    if token is None:
+        raise ValueError(
+            "GitHub token not provided. Add GITHUB_TOKEN to your .env file."
+        )
+    return token
+
+
+def get_repository_primary_language(repo_name: str, github_client: Github):
+    """
+    Get the primary programming language for a repository.
+    Uses a global cache to avoid duplicate API calls.
+
+    Args:
+        repo_name: Full name of the repository (owner/repo)
+        github_client: GitHub API client
+
+    Returns:
+        str: Primary programming language or None if not found
+    """
+    global REPO_LANGUAGE_CACHE
+
+    # Check if we already have this repository's language in the cache
+    if repo_name in REPO_LANGUAGE_CACHE:
+        return REPO_LANGUAGE_CACHE[repo_name]
+
+    # Otherwise make the API call
+    try:
+        repo = github_client.get_repo(repo_name)
+        language = repo.language
+        # Store in cache
+        REPO_LANGUAGE_CACHE[repo_name] = language
+        return language
+
+    except Exception as e:
+        logging.warning(f"Error getting language for {repo_name}: {str(e)}")
+        # Cache the failure as None
+        REPO_LANGUAGE_CACHE[repo_name] = None
+
+    return None
 
 
 def load_cursor_adoption_repos(repos_path: Path) -> pd.DataFrame:
@@ -264,48 +322,6 @@ def compute_propensity_scores(
     return result_df
 
 
-def get_github_token():
-    """
-    Retrieve GitHub token from environment variables.
-
-    Returns:
-        str: GitHub token
-
-    Raises:
-        ValueError: If no token is found
-    """
-    # Load environment variables from .env file
-    load_dotenv(override=True)
-    token = os.getenv("GITHUB_TOKEN")
-
-    if token is None:
-        raise ValueError(
-            "GitHub token not provided. Add GITHUB_TOKEN to your .env file."
-        )
-    return token
-
-
-def get_repository_primary_language(repo_name: str, github_client: Github):
-    """
-    Get the primary programming language for a repository.
-
-    Args:
-        repo_name: Full name of the repository (owner/repo)
-        github_client: GitHub API client
-
-    Returns:
-        str: Primary programming language or None if not found
-    """
-    try:
-        repo = github_client.get_repo(repo_name)
-        return repo.language
-
-    except Exception as e:
-        logging.warning(f"Error getting language for {repo_name}: {str(e)}")
-
-    return None
-
-
 def perform_nearest_neighbor_matching(summary_df: pd.DataFrame) -> pd.DataFrame:
     """
     Perform nearest neighbor matching for each treatment repository within matched periods.
@@ -386,10 +402,10 @@ def perform_nearest_neighbor_matching(summary_df: pd.DataFrame) -> pd.DataFrame:
                 control_score = control_row["propensity_score"]
                 score_diff = control_row["score_diff"]
 
-                # control_language = get_repository_primary_language(
-                #    control_name, github_client
-                # )
-                control_language = treat_language  # turns off language matching for now
+                control_language = get_repository_primary_language(
+                    control_name, github_client
+                )
+                # control_language = treat_language  # turns off language matching for now
 
                 if treat_language is None or (control_language == treat_language):
                     match_count += 1
