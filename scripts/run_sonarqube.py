@@ -61,7 +61,7 @@ REPOS_CSV = DATA_DIR / "repos.csv"  # Add path for repos data
 NUM_PROCESSES = 16  # if too much may crash Elastic Search
 
 # Taking too long to analyze plus no metrics are able to be collected
-REPO_IGNORE = ["meshery/meshery"]  # "dotCMS/core"]
+REPO_IGNORE = ["meshery/meshery", "swc-project/swc"]  # "dotCMS/core"]
 
 
 def check_analysis_exists(project_key: str, version: str) -> bool:
