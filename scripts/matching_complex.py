@@ -23,7 +23,7 @@ MAX_CONTROL_REPOS = 10000
 
 # Model configuration
 USE_RANDOM_FOREST = False  # Deprecated, Random Forest is not used anymore
-USE_LANGUAGE_MATCHING = True  # True to match repositories with the same language
+USE_LANGUAGE_MATCHING = False  # True to match repositories with the same language
 
 # Global cache for repository languages
 REPO_LANGUAGE_CACHE = {}
@@ -351,8 +351,6 @@ def perform_nearest_neighbor_matching(summary_df: pd.DataFrame) -> pd.DataFrame:
     # Initialize the matched columns for up to three matches
     for i in range(1, 4):
         summary_df[f"matched_control_{i}"] = ""
-        summary_df[f"matched_language_{i}"] = ""
-        summary_df[f"propensity_score_diff_{i}"] = None
 
     # Load repositories data to get primary languages for treatment repositories
     repos_df = pd.read_csv(REPOS_FILE)
