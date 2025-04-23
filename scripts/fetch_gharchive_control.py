@@ -88,7 +88,7 @@ WITH
       pr.period_type,
 
       -- age in days at end of each period:
-      DATE_DIFF(
+      GREATEST(0, DATE_DIFF(
         CASE
           WHEN pr.period_type = 'within' THEN
             -- last day of that month
@@ -105,7 +105,7 @@ WITH
         END,
         DATE(MIN(e.created_at)),
         DAY
-      ) AS age_days,
+      )) AS age_days,
 
       -- distinct users in the bucket
       COUNT(DISTINCT
