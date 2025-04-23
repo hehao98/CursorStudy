@@ -1,0 +1,126 @@
+---
+title: "Propensity Score Matching Analysis"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(kableExtra)
+```
+
+## Loading and Exploring the Matching Data
+
+```{r load_data}
+matching_data <- read.csv("../data/matching.csv", stringsAsFactors = FALSE)
+glimpse(matching_data)
+```
+
+## Descriptive Statistics Table
+
+```{r descriptive_statistics_table, results='asis'}
+# Define all metrics including propensity score
+all_metrics <- c(
+    "propensity_score", "age_days", "users_involved", "n_stars", "n_forks",
+    "n_releases", "n_pulls", "n_issues", "n_comments", "total_events"
+)
+
+# Create a dataframe for combined visualization
+combined_data <- data.frame()
+
+for (metric in all_metrics) {
+    # Extract data for each group
+    treatment_data <- matching_data %>%
+        filter(group == "treatment") %>%
+        select(repo_name, !!sym(metric)) %>%
+        mutate(
+            Group = "Treatment",
+            Metric = gsub("_", " ", paste0(toupper(substr(metric, 1, 1)), substr(metric, 2, nchar(metric)))),
+            Value = !!sym(metric)
+        )
+
+    # Get matched control repos (combine all three possible matches)
+    matched_control_repos <- c(
+        unique(na.omit(matching_data$matched_control_1)),
+        unique(na.omit(matching_data$matched_control_2)),
+        unique(na.omit(matching_data$matched_control_3))
+    ) %>% unique()
+
+    control_matched_data <- matching_data %>%
+        filter(repo_name %in% matched_control_repos) %>%
+        select(repo_name, !!sym(metric)) %>%
+        mutate(
+            Group = "Matched Control",
+            Metric = gsub("_", " ", paste0(toupper(substr(metric, 1, 1)), substr(metric, 2, nchar(metric)))),
+            Value = !!sym(metric)
+        )
+
+    control_all_data <- matching_data %>%
+        filter(group == "control") %>%
+        select(repo_name, !!sym(metric)) %>%
+        mutate(
+            Group = "All Control",
+            Metric = gsub("_", " ", paste0(toupper(substr(metric, 1, 1)), substr(metric, 2, nchar(metric)))),
+            Value = !!sym(metric)
+        )
+
+    # Combine data for current metric
+    metric_data <- bind_rows(treatment_data, control_matched_data, control_all_data) %>%
+        select(repo_name, Group, Metric, Value)
+
+    # Add to combined dataframe
+    combined_data <- bind_rows(combined_data, metric_data)
+}
+
+# Define metrics that need log transformation
+log_metrics <- c("Propensity score", "Age days", "Users involved", "N stars", "N forks",
+                "N releases", "N pulls", "N issues", "N comments", "Total events")
+
+# Prepare data with appropriate transformations
+combined_data <- combined_data %>%
+    mutate(
+        # Add a small constant to ensure log works with zeros
+        Value_transformed = ifelse(Value <= 0, 0.1, Value),
+        Metric_label = ifelse(Metric %in% log_metrics,
+                             paste0(Metric, " (log scale)"),
+                             Metric)
+    )
+
+# Calculate descriptive statistics for each metric by group
+stats_table <- combined_data %>%
+  group_by(Metric, Group) %>%
+  summarise(
+    Count = n(),
+    Mean = mean(Value, na.rm = TRUE),
+    StdDev = sd(Value, na.rm = TRUE),
+    Min = quantile(Value, 0, na.rm = TRUE),
+    Q25 = quantile(Value, 0.25, na.rm = TRUE),
+    Median = quantile(Value, 0.5, na.rm = TRUE),
+    Q75 = quantile(Value, 0.75, na.rm = TRUE),
+    Max = quantile(Value, 1, na.rm = TRUE)
+  ) %>%
+  ungroup()
+
+# Format the numbers properly
+stats_table_formatted <- stats_table %>%
+  mutate(
+    Mean = round(Mean, 4),
+    StdDev = round(StdDev, 4),
+    Min = round(Min, 4),
+    Q25 = round(Q25, 4),
+    Median = round(Median, 4),
+    Q75 = round(Q75, 4),
+    Max = round(Max, 4)
+  )
+
+# Create an HTML table
+stats_table_formatted %>%
+  kable("html", caption = "Descriptive Statistics by Metric and Group") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"),
+                full_width = TRUE) %>%
+  column_spec(1, bold = TRUE) %>%
+  collapse_rows(columns = 1, valign = "top") %>%
+  scroll_box(width = "100%", height = "600px")
+```
