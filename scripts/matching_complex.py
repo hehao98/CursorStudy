@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 from dotenv import load_dotenv
 from github import Github
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import precision_score, recall_score
 from sklearn.preprocessing import StandardScaler
@@ -19,6 +20,10 @@ MATCHING_FILE = Path(__file__).parent.parent / "data" / "matching.csv"
 CONTROL_REPOS_DIR = Path(__file__).parent.parent / "data"
 EARLIEST_CONTROL_MONTH = "202408"
 MAX_CONTROL_REPOS = 10000
+
+# Model configuration
+USE_RANDOM_FOREST = False  # Deprecated, Random Forest is not used anymore
+USE_LANGUAGE_MATCHING = True  # True to match repositories with the same language
 
 # Global cache for repository languages
 REPO_LANGUAGE_CACHE = {}
@@ -280,7 +285,7 @@ def compute_propensity_scores(
         how="left",
     )
 
-    logging.info("Training logistic regression model")
+    logging.info("Training model")
     X = features_df.drop(["repo_name", "treatment"], axis=1)
     y = features_df["treatment"]
 
@@ -288,7 +293,14 @@ def compute_propensity_scores(
     scaler = StandardScaler()
     X_scaled = scaler.fit_transform(X)
 
-    model = LogisticRegression(random_state=42)
+    # Select model based on global configuration
+    if USE_RANDOM_FOREST:
+        model = RandomForestClassifier(random_state=42)
+        logging.info("Training Random Forest model")
+    else:
+        model = LogisticRegression(random_state=42)
+        logging.info("Training Logistic Regression model")
+
     model.fit(X_scaled, y)
 
     # Calculate precision and recall
@@ -297,16 +309,17 @@ def compute_propensity_scores(
     recall = recall_score(y, y_pred)
     logging.info("Precision: %.4f, Recall: %.4f", precision, recall)
 
-    # Calculate McFadden's pseudo R-squared
-    # First, get the log-likelihood of the full model
+    # Calculate McFadden's pseudo R-squared (for logistic regression only)
     y_pred_proba = model.predict_proba(X_scaled)[:, 1]
-    ll_full = sum(y * np.log(y_pred_proba) + (1 - y) * np.log(1 - y_pred_proba))
-    # Then, calculate the log-likelihood of the null model (intercept only)
-    null_prob = sum(y) / len(y)
-    ll_null = sum(y * np.log(null_prob) + (1 - y) * np.log(1 - null_prob))
-    # Calculate McFadden's pseudo R-squared
-    mcfadden_r2 = 1 - (ll_full / ll_null)
-    logging.info("McFadden's pseudo R-squared: %.4f", mcfadden_r2)
+    if not USE_RANDOM_FOREST:
+        # First, get the log-likelihood of the full model
+        ll_full = sum(y * np.log(y_pred_proba) + (1 - y) * np.log(1 - y_pred_proba))
+        # Then, calculate the log-likelihood of the null model (intercept only)
+        null_prob = sum(y) / len(y)
+        ll_null = sum(y * np.log(null_prob) + (1 - y) * np.log(1 - null_prob))
+        # Calculate McFadden's pseudo R-squared
+        mcfadden_r2 = 1 - (ll_full / ll_null)
+        logging.info("McFadden's pseudo R-squared: %.4f", mcfadden_r2)
 
     # Calculate propensity scores using normalized features
     propensity_scores = model.predict_proba(X_scaled)[:, 1]
@@ -325,7 +338,9 @@ def compute_propensity_scores(
 def perform_nearest_neighbor_matching(summary_df: pd.DataFrame) -> pd.DataFrame:
     """
     Perform nearest neighbor matching for each treatment repository within matched periods.
-    Finds up to three control repositories with the closest propensity scores and same primary language.
+    Finds up to three control repositories with the closest propensity scores.
+
+    If USE_LANGUAGE_MATCHING is True, also requires the same primary language for matching.
 
     Args:
         summary_df: DataFrame with one row per repository including propensity scores
@@ -402,12 +417,19 @@ def perform_nearest_neighbor_matching(summary_df: pd.DataFrame) -> pd.DataFrame:
                 control_score = control_row["propensity_score"]
                 score_diff = control_row["score_diff"]
 
-                control_language = get_repository_primary_language(
-                    control_name, github_client
-                )
-                # control_language = treat_language  # turns off language matching for now
+                # Only check language if language matching is enabled
+                if USE_LANGUAGE_MATCHING:
+                    control_language = get_repository_primary_language(
+                        control_name, github_client
+                    )
+                    language_match = treat_language is None or (
+                        control_language == treat_language
+                    )
+                else:
+                    control_language = None
+                    language_match = True
 
-                if treat_language is None or (control_language == treat_language):
+                if language_match:
                     match_count += 1
                     matched_controls.add(control_name)
 
@@ -425,7 +447,7 @@ def perform_nearest_neighbor_matching(summary_df: pd.DataFrame) -> pd.DataFrame:
                         control_name,
                         control_score,
                         score_diff,
-                        control_language,
+                        "ignored" if not USE_LANGUAGE_MATCHING else control_language,
                         match_count,
                     )
 
