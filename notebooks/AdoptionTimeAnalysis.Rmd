@@ -68,3 +68,36 @@ print(p)
 
 ggsave("../plots/cursor_adoption_time.pdf", plot = p, width = 5, height = 3)
 ```
+
+## Distribution of Repository Creation Time
+
+```{r, fig.width = 9}
+# Create year-quarter field for repository creation dates
+repos_df <- repos_df %>%
+    mutate(
+        # Extract quarter (Q1, Q2, Q3, Q4) from date
+        quarter = paste0("Q", ceiling(month(repo_created)/3)),
+        # Format as YYYY-QN
+        creation_yearquarter = paste0(year(repo_created), "-", quarter)
+    )
+
+# Plot repo creation over time (by year-quarter) with bar chart and numbers on top
+creation_counts <- repos_df %>%
+    count(creation_yearquarter) %>%
+    arrange(creation_yearquarter)
+
+p2 <- ggplot(creation_counts, aes(x = creation_yearquarter, y = n)) +
+    geom_bar(stat = "identity", fill = "forestgreen") +
+    geom_text(aes(label = n), vjust = -0.5, size = 3) +
+    labs(
+        x = "Year-Quarter",
+        y = "Number of Repositories"
+    ) +
+    scale_y_continuous(expand = c(0, 0)) +
+    coord_cartesian(ylim = c(0, max(creation_counts$n) * 1.1), clip = "off") +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+print(p2)
+
+ggsave("../plots/repo_creation_time.pdf", plot = p2, width = 9, height = 3)
+```
