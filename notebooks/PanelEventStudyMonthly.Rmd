@@ -165,7 +165,6 @@ ggplot(plot_data, aes(x = time, y = estimate, color = outcome)) +
     facet_wrap(~outcome, scales = "free_y") +
     labs(
         title = "Event Study: Effects of Cursor Adoption",
-        subtitle = "Including treatment effect at time of intervention (t=0)",
         x = "Months Relative to Adoption",
         y = "Coefficient Estimate",
         color = "Outcome",
