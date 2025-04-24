@@ -112,7 +112,7 @@ get_event_data <- function(model, outcome_name) {
     ci <- confint(model)
     pvals <- summary(model)$coeftable[, 4]
 
-    time_periods <- c(-6:-1, 1:6)
+    time_periods <- c(-6:6)  # Changed to include 0
     estimates <- numeric(length(time_periods))
     conf_low <- numeric(length(time_periods))
     conf_high <- numeric(length(time_periods))
@@ -165,6 +165,7 @@ ggplot(plot_data, aes(x = time, y = estimate, color = outcome)) +
     facet_wrap(~outcome, scales = "free_y") +
     labs(
         title = "Event Study: Effects of Cursor Adoption",
+        subtitle = "Including treatment effect at time of intervention (t=0)",
         x = "Months Relative to Adoption",
         y = "Coefficient Estimate",
         color = "Outcome",
@@ -173,6 +174,7 @@ ggplot(plot_data, aes(x = time, y = estimate, color = outcome)) +
     theme_minimal() +
     theme(
         legend.position = "bottom",
-        legend.box = "horizontal"
+        legend.box = "horizontal",
+        plot.subtitle = element_text(size = 10, color = "darkblue")
     )
 ```
