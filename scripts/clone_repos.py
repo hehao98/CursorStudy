@@ -14,6 +14,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 # Constants
@@ -189,17 +190,26 @@ def main():
             return
 
         # Filter repositories with 10 or more stars
-        repos_to_clone = df[df["repo_stars"] >= MIN_STARS]
+        repos_to_clone = set(df[df["repo_stars"] >= MIN_STARS].repo_name)
         logging.info("Found %d repos with %d+ stars", len(repos_to_clone), MIN_STARS)
     else:
         try:
             df = pd.read_csv(CONTROL_REPOS_CSV)
-            logging.info("%d controls from %s", len(df), CONTROL_REPOS_CSV)
         except Exception as e:
             logging.error("Failed to read CSV file: %s", str(e))
             return
 
-        raise NotImplementedError("Control repositories not implemented yet")
+        repos_to_clone = [
+            repo
+            for repo in set(
+                sum(
+                    [list(df[f"matched_control_{i}"]) for i in range(1, 4)],
+                    [],
+                ),
+            )
+            if isinstance(repo, str)
+        ]
+        logging.info("Found %d control repos", len(repos_to_clone))
 
     # Clone repositories
     success_count = 0
@@ -208,8 +218,7 @@ def main():
 
     logging.info("Starting repository processing at %s", start_time.isoformat())
 
-    for idx, repo in repos_to_clone.iterrows():
-        repo_name = repo["repo_name"]
+    for idx, repo_name in enumerate(repos_to_clone):
         clone_path = CLONE_DIR / repo_name.replace("/", "_")
 
         # Check if repository exists before handling
@@ -222,9 +231,7 @@ def main():
 
         # Log progress periodically
         if (idx + 1) % 10 == 0:
-            logging.info(
-                "Progress: %d/%d repositories processed", idx + 1, len(repos_to_clone)
-            )
+            logging.info("%d/%d repos processed", idx + 1, len(repos_to_clone))
 
     end_time = datetime.now()
     duration = (end_time - start_time).total_seconds()

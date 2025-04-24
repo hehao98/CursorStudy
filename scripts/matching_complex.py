@@ -23,7 +23,7 @@ MAX_CONTROL_REPOS = 10000
 
 # Model configuration
 USE_RANDOM_FOREST = False  # Deprecated, Random Forest is not used anymore
-USE_LANGUAGE_MATCHING = False  # True to match repositories with the same language
+USE_LANGUAGE_MATCHING = True  # True to match repositories with the same language
 
 # Global cache for repository languages
 REPO_LANGUAGE_CACHE = {}
