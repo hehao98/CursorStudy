@@ -21,10 +21,8 @@ import pandas as pd
 DATA_DIR = Path(__file__).parent.parent / "data"
 REPOS_CSV = DATA_DIR / "repos.csv"
 
-# Lead and lag periods to generate
-LEAD_PERIODS = range(1, 7)  # lead 1 to lead 6
-LAG_PERIODS = range(0, 7)  # lag 0 to lag 6
-
+WEEK_LEAD_AND_LAG = 30
+MONTH_LEAD_AND_LAG = 6
 # Fixed start date for data collection, matching run_sonarqube.py
 START_DATE = "2024-01-01"
 END_DATE = "2025-03-31"  # Drop anything beyond this to avoid incomplete data
@@ -124,16 +122,25 @@ def pad_missing_periods(
 
 
 def generate_lead_lag_indicators(
-    df: pd.DataFrame, time_col: str, event_time: str
+    df: pd.DataFrame,
+    time_col: str,
+    event_time: str,
+    lead_periods=range(1, 7),
+    lag_periods=range(0, 7),
 ) -> pd.DataFrame:
     """Generate lead and lag indicator variables for the event."""
     result_df = df.copy()
 
     # Convert times to datetime objects for comparison
-    result_df["time_dt"] = pd.to_datetime(
-        result_df[time_col] + ("-1" if time_col == "week" else "-01")
-    )
-    event_dt = pd.to_datetime(event_time + ("-1" if time_col == "week" else "-01"))
+    if time_col == "week":
+        # Handle ISO week format properly
+        result_df["time_dt"] = result_df[time_col].apply(
+            lambda x: pd.to_datetime(x + "-1", format="%Y-W%W-%w")
+        )
+        event_dt = pd.to_datetime(event_time + "-1", format="%Y-W%W-%w")
+    else:  # month
+        result_df["time_dt"] = pd.to_datetime(result_df[time_col] + "-01")
+        event_dt = pd.to_datetime(event_time + "-01")
 
     # Calculate time to event (in periods)
     if time_col == "week":
@@ -151,27 +158,26 @@ def generate_lead_lag_indicators(
     result_df["time"] = result_df[time_col]
 
     # Generate lead and lag indicators
-    for lead in LEAD_PERIODS[:-1]:
+    for lead in lead_periods[:-1]:
         result_df[f"lead_{lead}"] = (result_df["time_to_event"] == -lead).astype(int)
-    result_df[f"lead_{LEAD_PERIODS[-1]}"] = (
-        result_df["time_to_event"] <= -LEAD_PERIODS[-1]
+    result_df[f"lead_{lead_periods[-1]}"] = (
+        result_df["time_to_event"] <= -lead_periods[-1]
     ).astype(int)
 
-    for lag in LAG_PERIODS[:-1]:
+    for lag in lag_periods[:-1]:
         result_df[f"lag_{lag}"] = (result_df["time_to_event"] == lag).astype(int)
-    result_df[f"lag_{LAG_PERIODS[-1]}"] = (
-        result_df["time_to_event"] >= LAG_PERIODS[-1]
+    result_df[f"lag_{lag_periods[-1]}"] = (
+        result_df["time_to_event"] >= lag_periods[-1]
     ).astype(int)
 
     return result_df.drop(columns=["time_dt"])
 
 
-def prepare_panel_data(aggregation: str) -> pd.DataFrame:
-    """Prepare panel data with lead and lag indicators for cursor adoption events."""
-    # Set paths and time column
+def load_data(aggregation: str) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Load repository and time series data."""
     ts_file = DATA_DIR / f"ts_repos_{aggregation}ly.csv"
 
-    # Read repository data and time series data
+    # Read repository data
     logging.info(f"Reading repository data from {REPOS_CSV}")
     repos_df = pd.read_csv(REPOS_CSV).dropna(subset=["repo_cursor_adoption"])
 
@@ -191,42 +197,46 @@ def prepare_panel_data(aggregation: str) -> pd.DataFrame:
     )
     logging.info(f"Padded missing {aggregation}s in time series data")
 
-    # Process each repository
-    panel_dfs = []
-    processed_repos = 0
+    return repos_df, ts_df
 
-    for _, repo in repos_df.iterrows():
-        repo_name = repo["repo_name"]
-        adoption_time = repo["adoption_time"]
 
-        # Get time series data for this repository
-        repo_ts = ts_df[ts_df["repo_name"] == repo_name].copy()
+def process_repo_panel(
+    repo_name: str,
+    adoption_time: str,
+    ts_df: pd.DataFrame,
+    aggregation: str,
+    lead_periods: range,
+    lag_periods: range,
+) -> pd.DataFrame:
+    """Generate panel data for a single repository."""
+    # Get time series data for this repository
+    repo_ts = ts_df[ts_df["repo_name"] == repo_name].copy()
 
-        if repo_ts.empty:
-            logging.warning(f"No time series data found for repository: {repo_name}")
-            continue
+    if repo_ts.empty:
+        logging.warning(f"No time series data found for repository: {repo_name}")
+        return None
 
-        # Generate lead and lag indicators
-        repo_panel = generate_lead_lag_indicators(
-            df=repo_ts, time_col=aggregation, event_time=adoption_time
-        )
-
-        panel_dfs.append(repo_panel)
-        processed_repos += 1
-
-    if not panel_dfs:
-        logging.error("No repositories with sufficient data for panel analysis")
-        return pd.DataFrame()
-
-    # Combine all repository panel data
-    panel_df = pd.concat(panel_dfs, ignore_index=True)
-    logging.info(f"Processed {processed_repos} repositories for panel analysis")
-
-    # Create a datetime column for filtering
-    date_format = "%Y-W%W-1" if aggregation == "week" else "%Y-%m-01"
-    panel_df["filter_date"] = pd.to_datetime(
-        panel_df[aggregation] + ("-1" if aggregation == "week" else "-01")
+    # Generate lead and lag indicators
+    return generate_lead_lag_indicators(
+        df=repo_ts,
+        time_col=aggregation,
+        event_time=adoption_time,
+        lead_periods=lead_periods,
+        lag_periods=lag_periods,
     )
+
+
+def filter_panel_data(panel_df: pd.DataFrame, aggregation: str) -> pd.DataFrame:
+    """Filter panel data by date range and add repository age."""
+    # Create a datetime column for filtering
+    if aggregation == "week":
+        # Handle ISO week format properly
+        panel_df["filter_date"] = panel_df[aggregation].apply(
+            lambda x: pd.to_datetime(x + "-1", format="%Y-W%W-%w")
+        )
+    else:  # month
+        panel_df["filter_date"] = pd.to_datetime(panel_df[aggregation] + "-01")
+
     start_date_dt = pd.to_datetime(START_DATE)
     end_date_dt = pd.to_datetime(END_DATE)
 
@@ -268,15 +278,22 @@ def prepare_panel_data(aggregation: str) -> pd.DataFrame:
         f"{rows_filtered_end} rows after {END_DATE}"
     )
 
+    return panel_df
+
+
+def reorder_columns(
+    panel_df: pd.DataFrame, aggregation: str, lead_periods: range, lag_periods: range
+) -> pd.DataFrame:
+    """Reorder columns in the panel dataframe for better organization."""
     # Reorder columns to put event-related columns right after time column
     event_columns = ["event", "post_event", "time_to_event"]
 
     # Add lead columns in order
-    for lead in sorted(LEAD_PERIODS, reverse=True):
+    for lead in sorted(lead_periods, reverse=True):
         event_columns.append(f"lead_{lead}")
 
     # Add lag columns in order
-    for lag in sorted(LAG_PERIODS):
+    for lag in sorted(lag_periods):
         event_columns.append(f"lag_{lag}")
 
     # Get all other columns that are not repo_name, time, or event-related
@@ -298,6 +315,54 @@ def prepare_panel_data(aggregation: str) -> pd.DataFrame:
         cols.remove("age")
         cols.insert(lines_added_idx + 1, "age")
         panel_df = panel_df[cols]
+
+    return panel_df
+
+
+def prepare_panel_data(aggregation: str) -> pd.DataFrame:
+    """Prepare panel data with lead and lag indicators for cursor adoption events."""
+    # Define lead and lag periods based on aggregation
+    if aggregation == "week":
+        lead_periods = range(1, WEEK_LEAD_AND_LAG + 1)
+        lag_periods = range(0, WEEK_LEAD_AND_LAG + 1)
+    else:
+        lead_periods = range(1, MONTH_LEAD_AND_LAG + 1)
+        lag_periods = range(0, MONTH_LEAD_AND_LAG + 1)
+
+    # Load data
+    repos_df, ts_df = load_data(aggregation)
+
+    # Process each repository
+    panel_dfs = []
+    processed_repos = 0
+
+    for _, repo in repos_df.iterrows():
+        repo_panel = process_repo_panel(
+            repo_name=repo["repo_name"],
+            adoption_time=repo["adoption_time"],
+            ts_df=ts_df,
+            aggregation=aggregation,
+            lead_periods=lead_periods,
+            lag_periods=lag_periods,
+        )
+
+        if repo_panel is not None:
+            panel_dfs.append(repo_panel)
+            processed_repos += 1
+
+    if not panel_dfs:
+        logging.error("No repositories with sufficient data for panel analysis")
+        return pd.DataFrame()
+
+    # Combine all repository panel data
+    panel_df = pd.concat(panel_dfs, ignore_index=True)
+    logging.info(f"Processed {processed_repos} repositories for panel analysis")
+
+    # Filter data and add repository age
+    panel_df = filter_panel_data(panel_df, aggregation)
+
+    # Reorder columns
+    panel_df = reorder_columns(panel_df, aggregation, lead_periods, lag_periods)
 
     return panel_df
 
