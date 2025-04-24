@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 from github import Github
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import precision_score, recall_score
+from sklearn.metrics import roc_auc_score
 from sklearn.preprocessing import StandardScaler
 
 # Global variables for file paths
@@ -303,11 +303,9 @@ def compute_propensity_scores(
 
     model.fit(X_scaled, y)
 
-    # Calculate precision and recall
-    y_pred = model.predict(X_scaled)
-    precision = precision_score(y, y_pred)
-    recall = recall_score(y, y_pred)
-    logging.info("Precision: %.4f, Recall: %.4f", precision, recall)
+    # Calculate AUC score
+    auc_score = roc_auc_score(y, model.predict_proba(X_scaled)[:, 1])
+    logging.info("AUC score: %.4f", auc_score)
 
     # Calculate McFadden's pseudo R-squared (for logistic regression only)
     y_pred_proba = model.predict_proba(X_scaled)[:, 1]

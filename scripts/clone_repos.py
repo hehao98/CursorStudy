@@ -219,7 +219,9 @@ def main():
     logging.info("Starting repository processing at %s", start_time.isoformat())
 
     for idx, repo_name in enumerate(repos_to_clone):
-        clone_path = CLONE_DIR / repo_name.replace("/", "_")
+        # Choose clone directory based on --control flag
+        target_dir = CONTROL_CLONE_DIR if args.control else CLONE_DIR
+        clone_path = target_dir / repo_name.replace("/", "_")
 
         # Check if repository exists before handling
         repo_existed = clone_path.exists() and is_git_repo(clone_path)
