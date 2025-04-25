@@ -38,6 +38,7 @@ TIME_KEY = None
 
 # Fixed start date for data collection, 2024-01-01 determined by adoption time analysis
 START_DATE = "2024-01-01"
+END_DATE = "2025-03-31"
 
 # Metrics to collect from SonarQube
 METRICS_OF_INTEREST = [
@@ -293,13 +294,15 @@ def process_repository(
 
     # Get start and end times using the same format
     start_time = pd.Timestamp(START_DATE).strftime(date_format)
-    end_time = pd.Timestamp.now().strftime(date_format)
+    end_time = pd.Timestamp(END_DATE).strftime(date_format)
 
     logging.info("Processing %s from %s to %s", repo_name, start_time, end_time)
 
     # Process each time period's latest commit in chronological order
     for time_period in sorted(
-        repo_df[repo_df[TIME_KEY] >= start_time][TIME_KEY].unique()
+        repo_df[(repo_df[TIME_KEY] >= start_time) & (repo_df[TIME_KEY] <= end_time)][
+            TIME_KEY
+        ].unique()
     ):
         row_idx = repo_df[repo_df[TIME_KEY] == time_period].index[0]
         commit_hash = repo_df.loc[row_idx, "latest_commit"]

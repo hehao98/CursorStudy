@@ -77,6 +77,53 @@ def pull_latest_changes(repo_path, repo_name):
         bool: True if pull was successful, False otherwise
     """
     try:
+        # First, forcefully discard any local changes
+        subprocess.run(
+            ["git", "-C", str(repo_path), "reset", "--hard"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+
+        # Clean untracked files and directories
+        subprocess.run(
+            ["git", "-C", str(repo_path), "clean", "-fd"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        logging.info("Forcefully discarded any local changes for %s", repo_name)
+
+        # Now identify and checkout the default branch (main or master)
+        # Check if main branch exists
+        result = subprocess.run(
+            ["git", "-C", str(repo_path), "branch", "-a"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+
+        # Try to determine the default branch (main or master)
+        branches = result.stdout.strip()
+        default_branch = "main"
+
+        if "origin/main" in branches:
+            default_branch = "main"
+        elif "origin/master" in branches:
+            default_branch = "master"
+
+        # Checkout the default branch
+        subprocess.run(
+            ["git", "-C", str(repo_path), "checkout", default_branch],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        logging.info(
+            "Successfully checked out %s branch for %s", default_branch, repo_name
+        )
+
+        # Then pull latest changes
         subprocess.run(
             ["git", "-C", str(repo_path), "pull", "--ff-only"],
             check=True,
@@ -135,7 +182,26 @@ def handle_repository(repo_name, clone_path):
     if clone_path.exists():
         if is_git_repo(clone_path):
             logging.info("Repository %s already exists, updating...", repo_name)
-            return pull_latest_changes(clone_path, repo_name)
+            if pull_latest_changes(clone_path, repo_name):
+                return True
+            else:
+                logging.warning(
+                    "Failed to update %s, deleting and cloning fresh", repo_name
+                )
+                try:
+                    # Remove failed repository directory
+                    import shutil
+
+                    shutil.rmtree(clone_path)
+                    # Clone repository
+                    return clone_repository(repo_name, clone_path)
+                except Exception as e:
+                    logging.error(
+                        "Failed to remove repository directory %s: %s",
+                        clone_path,
+                        str(e),
+                    )
+                    return False
         else:
             logging.warning(
                 "Directory %s exists but is not a valid Git repository. Removing and cloning fresh.",
