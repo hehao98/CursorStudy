@@ -65,12 +65,22 @@ def get_commit_stats(
     """
     try:
         repo = git.Repo(str(repo_path))
+
+        # Checkout HEAD before collecting any metrics
+        try:
+            logging.info("Checking out HEAD for repo %s", repo_path.name)
+            repo.git.checkout("HEAD")
+        except git.GitCommandError as e:
+            logging.error("Failed to checkout HEAD for %s: %s", repo_path.name, e)
+            # Continue anyway to try to collect what we can
+
         repo_name = repo_path.name.replace("_", "/")
 
         time_stats = defaultdict(
             lambda: {
                 "commits": 0,
                 "lines_added": 0,
+                "lines_removed": 0,
                 "contributors": set(),
                 "latest_commit": None,
                 "latest_commit_time": None,
@@ -96,6 +106,7 @@ def get_commit_stats(
                 if commit.parents:
                     parent = commit.parents[0]
                     added_lines = 0
+                    removed_lines = 0
 
                     try:
                         cmd = [
@@ -114,18 +125,30 @@ def get_commit_stats(
                             for line in result.stdout.strip().split("\n"):
                                 if line.strip():
                                     parts = line.split()
-                                    if len(parts) >= 2 and parts[0] != "-":
-                                        try:
-                                            added_lines += int(parts[0])
-                                        except ValueError:
-                                            pass
+                                    if len(parts) >= 2:
+                                        if parts[0] != "-":
+                                            try:
+                                                added_lines += int(parts[0])
+                                            except ValueError:
+                                                pass
+                                        if parts[1] != "-":
+                                            try:
+                                                removed_lines += int(parts[1])
+                                            except ValueError:
+                                                pass
 
-                        logging.debug("%s: +%d lines", commit.hexsha[:8], added_lines)
+                        logging.debug(
+                            "%s: +%d -%d lines",
+                            commit.hexsha[:8],
+                            added_lines,
+                            removed_lines,
+                        )
                     except subprocess.SubprocessError as e:
                         logging.error("Diff failed for commit %s: %s", commit.hexsha, e)
                         continue
 
                     time_stats[time_key]["lines_added"] += added_lines
+                    time_stats[time_key]["lines_removed"] += removed_lines
             except Exception as e:
                 logging.debug("Could not get diff for commit %s: %s", commit.hexsha, e)
                 continue
@@ -136,6 +159,7 @@ def get_commit_stats(
                 "latest_commit": stats["latest_commit"],
                 "commits": stats["commits"],
                 "lines_added": stats["lines_added"],
+                "lines_removed": stats["lines_removed"],
                 "contributors": len(stats["contributors"]),
             }
 
@@ -183,6 +207,7 @@ def process_repository(
                     "latest_commit": stats["latest_commit"],
                     "commits": stats["commits"],
                     "lines_added": stats["lines_added"],
+                    "lines_removed": stats["lines_removed"],
                     "contributors": stats["contributors"],
                 }
             )

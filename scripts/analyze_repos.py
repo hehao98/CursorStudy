@@ -70,21 +70,34 @@ def get_commit_stats(
     """
     try:
         repo = git.Repo(str(repo_path))
+
+        # Checkout HEAD before collecting any metrics
+        try:
+            logging.info("Checking out HEAD for repo %s", repo_path.name)
+            repo.git.checkout("HEAD")
+        except git.GitCommandError as e:
+            logging.error("Failed to checkout HEAD for %s: %s", repo_path.name, e)
+            # Continue anyway to try to collect what we can
+
         repo_name = repo_path.name.replace("_", "/")
 
         time_stats = defaultdict(
             lambda: {
                 "commits": 0,
                 "lines_added": 0,
+                "lines_removed": 0,
                 "contributors": set(),
                 "latest_commit": None,
                 "latest_commit_time": None,
+                "cursor_commits": 0,
             }
         )
 
         contributor_stats = []
         contributor_time_stats = defaultdict(
-            lambda: defaultdict(lambda: {"commits": 0, "lines_added": 0})
+            lambda: defaultdict(
+                lambda: {"commits": 0, "lines_added": 0, "lines_removed": 0}
+            )
         )
 
         for commit in repo.iter_commits():
@@ -108,6 +121,7 @@ def get_commit_stats(
                 if commit.parents:
                     parent = commit.parents[0]
                     added_lines = 0
+                    removed_lines = 0
 
                     try:
                         cmd = [
@@ -126,21 +140,36 @@ def get_commit_stats(
                             for line in result.stdout.strip().split("\n"):
                                 if line.strip():
                                     parts = line.split()
-                                    if len(parts) >= 2 and parts[0] != "-":
-                                        try:
-                                            added_lines += int(parts[0])
-                                        except ValueError:
-                                            pass
+                                    if len(parts) >= 2:
+                                        if parts[0] != "-":
+                                            try:
+                                                added_lines += int(parts[0])
+                                            except ValueError:
+                                                pass
+                                        if parts[1] != "-":
+                                            try:
+                                                removed_lines += int(parts[1])
+                                            except ValueError:
+                                                pass
 
-                        logging.debug("%s: +%d lines", commit.hexsha[:8], added_lines)
+                        logging.debug(
+                            "%s: +%d -%d lines",
+                            commit.hexsha[:8],
+                            added_lines,
+                            removed_lines,
+                        )
                     except subprocess.SubprocessError as e:
                         logging.error("Diff failed for commit %s: %s", commit.hexsha, e)
                         continue
 
                     time_stats[time_key]["lines_added"] += added_lines
+                    time_stats[time_key]["lines_removed"] += removed_lines
                     contributor_time_stats[time_key][author_str][
                         "lines_added"
                     ] += added_lines
+                    contributor_time_stats[time_key][author_str][
+                        "lines_removed"
+                    ] += removed_lines
             except Exception as e:
                 logging.debug("Could not get diff for commit %s: %s", commit.hexsha, e)
                 continue
@@ -151,7 +180,9 @@ def get_commit_stats(
                 "latest_commit": stats["latest_commit"],
                 "commits": stats["commits"],
                 "lines_added": stats["lines_added"],
+                "lines_removed": stats["lines_removed"],
                 "contributors": len(stats["contributors"]),
+                "cursor_commits": stats["cursor_commits"],
             }
 
         for time_key, authors in contributor_time_stats.items():
@@ -163,6 +194,7 @@ def get_commit_stats(
                         TIME_KEY: time_key,
                         "commits": stats["commits"],
                         "lines_added": stats["lines_added"],
+                        "lines_removed": stats["lines_removed"],
                     }
                 )
 
@@ -187,6 +219,15 @@ def find_cursor_file_introduction(
     """
     try:
         repo = git.Repo(str(repo_path))
+
+        # Checkout HEAD before analyzing
+        try:
+            logging.info("Checking out HEAD for repo %s", repo_path.name)
+            repo.git.checkout("HEAD")
+        except git.GitCommandError as e:
+            logging.error("Failed to checkout HEAD for %s: %s", repo_path.name, e)
+            # Continue anyway to try to collect what we can
+
         first_introduction = None
 
         for file_path in cursor_files:
@@ -230,6 +271,15 @@ def find_cursor_file_commits(repo_path: Path, cursor_files: List[str]) -> List[D
 
     try:
         repo = git.Repo(str(repo_path))
+
+        # Checkout HEAD before analyzing
+        try:
+            logging.info("Checking out HEAD for repo %s", repo_path.name)
+            repo.git.checkout("HEAD")
+        except git.GitCommandError as e:
+            logging.error("Failed to checkout HEAD for %s: %s", repo_path.name, e)
+            # Continue anyway to try to collect what we can
+
         repo_name = repo_path.name.replace("_", "/")
 
         for file_path in cursor_files:
@@ -263,6 +313,29 @@ def find_cursor_file_commits(repo_path: Path, cursor_files: List[str]) -> List[D
     except Exception as e:
         logging.error(f"Failed to find cursor file commits in {repo_path}: {e}")
         return []
+
+
+def count_cursor_commits_by_time(
+    cursor_commits: List[Dict], aggregation: str
+) -> Dict[str, int]:
+    """
+    Count cursor commits by time period.
+
+    Args:
+        cursor_commits: List of cursor commit data
+        aggregation: Either 'week' or 'month'
+
+    Returns:
+        Dictionary mapping time keys to cursor commit counts
+    """
+    time_counts = defaultdict(int)
+
+    for commit in cursor_commits:
+        commit_time = datetime.fromisoformat(commit["committed_at"])
+        time_key = get_time_key(commit_time, aggregation)
+        time_counts[time_key] += 1
+
+    return time_counts
 
 
 def process_repository(
@@ -313,8 +386,15 @@ def process_repository(
             logging.info("Found %d commits modifying cursor files", len(cursor_commits))
 
     weekly_stats, contributor_stats = get_commit_stats(repo_path, aggregation)
+
+    # Count cursor commits by time period
+    cursor_commits_by_time = count_cursor_commits_by_time(cursor_commits, aggregation)
+
     if weekly_stats:
         for time_key, stats in weekly_stats.items():
+            # Add cursor commits count to the stats
+            stats["cursor_commits"] = cursor_commits_by_time.get(time_key, 0)
+
             repo_ts.append(
                 {
                     "repo_name": repo_name,
@@ -322,7 +402,9 @@ def process_repository(
                     "latest_commit": stats["latest_commit"],
                     "commits": stats["commits"],
                     "lines_added": stats["lines_added"],
+                    "lines_removed": stats["lines_removed"],
                     "contributors": stats["contributors"],
+                    "cursor_commits": stats["cursor_commits"],
                 }
             )
 

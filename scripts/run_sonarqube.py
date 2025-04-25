@@ -55,7 +55,7 @@ METRICS_OF_INTEREST = [
 SCRIPT_DIR = Path(__file__).parent
 DATA_DIR = SCRIPT_DIR.parent / "data"
 CLONE_DIR = SCRIPT_DIR.parent.parent / "CursorRepos"
-REPOS_CSV = DATA_DIR / "repos.csv"  # Add path for repos data
+CONTROL_CLONE_DIR = SCRIPT_DIR.parent.parent / "ControlRepos"
 
 # Number of processes to use for parallel processing
 NUM_PROCESSES = 16  # if too much may crash Elastic Search
@@ -264,23 +264,23 @@ def get_sonar_metrics(project_key: str, version: str) -> Optional[Dict]:
 
 
 def process_repository(
-    ts_df: pd.DataFrame, repos_df: pd.DataFrame, repo_name: str, aggregation: str
+    ts_df: pd.DataFrame, repo_name: str, aggregation: str, is_control: bool = False
 ) -> pd.DataFrame:
     """
     Process a single repository's analysis.
 
     Args:
         ts_df: Time series dataframe
-        repos_df: Repository information dataframe
         repo_name: Name of the repository to process
         aggregation: Either 'week' or 'month'
+        is_control: Whether this is a control repository
 
     Returns:
         pd.DataFrame: Updated time series dataframe for this repository
     """
     # Setup repository info and data
     project_key = repo_name.replace("/", "_")
-    repo_path = CLONE_DIR / project_key
+    repo_path = (CONTROL_CLONE_DIR if is_control else CLONE_DIR) / project_key
     if not repo_path.exists():
         logging.warning("Repository %s not found at %s", repo_name, repo_path)
         return ts_df[ts_df["repo_name"] == repo_name]
@@ -333,6 +333,11 @@ def main() -> None:
         default="week",
         help="Aggregate data by week or month (default: week)",
     )
+    parser.add_argument(
+        "--control",
+        action="store_true",
+        help="Run analysis on control repositories instead of experimental ones",
+    )
     args = parser.parse_args()
     TIME_KEY = "week" if args.aggregation == "week" else "month"
 
@@ -346,19 +351,16 @@ def main() -> None:
         logging.error("SONAR_PATH and SONAR_TOKEN must be set in .env file")
         return
 
-    # Set input file path based on aggregation level
-    ts_repos_file = DATA_DIR / f"ts_repos_{args.aggregation}ly.csv"
+    # Set input file path based on aggregation level and control flag
+    file_prefix = "ts_repos_control_" if args.control else "ts_repos_"
+    ts_repos_file = DATA_DIR / f"{file_prefix}{args.aggregation}ly.csv"
 
     # Read repository time series data and adoption data
     try:
         ts_df = pd.read_csv(ts_repos_file)
-        repos_df = pd.read_csv(REPOS_CSV)
     except FileNotFoundError as e:
         logging.error(f"Required file not found: {e}")
         return
-
-    # Convert cursor_adoption_week to datetime
-    repos_df["repo_cursor_adoption"] = pd.to_datetime(repos_df["repo_cursor_adoption"])
 
     # Create columns for metrics if they don't exist
     for col in METRICS_OF_INTEREST:
@@ -369,7 +371,8 @@ def main() -> None:
     repo_names = set(ts_df["repo_name"].unique()) - set(REPO_IGNORE)
     with mp.Pool(NUM_PROCESSES) as pool:
         args_list = [
-            (ts_df, repos_df, repo_name, args.aggregation) for repo_name in repo_names
+            (ts_df, repo_name, args.aggregation, args.control)
+            for repo_name in repo_names
         ]
         results = pool.starmap(process_repository, args_list, chunksize=1)
 
