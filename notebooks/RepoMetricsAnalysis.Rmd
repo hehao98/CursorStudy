@@ -1,0 +1,134 @@
+---
+title: "Repository Metrics Analysis"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, fig.width = 6, fig.height = 4)
+```
+
+```{r}
+# Import necessary libraries
+library(tidyverse)
+library(lubridate)
+library(scales)
+library(kableExtra)
+
+# Set global ggplot theme - black axis lines, no grid
+theme_set(theme_minimal() +
+    theme(
+        panel.grid = element_blank(),
+        axis.line = element_line(color = "black"),
+        axis.ticks = element_line(color = "black")
+    ))
+```
+
+## Data Loading and Preprocessing
+
+```{r}
+# Load the dataset
+data_path <- "../data/repos.csv"
+repos_df <- read_csv(data_path)
+
+# Convert datetime columns to R datetime format
+repos_df <- repos_df %>%
+    mutate(
+        repo_created = ymd_hms(repo_created),
+        repo_updated = ymd_hms(repo_updated),
+        repo_cursor_adoption = ymd_hms(repo_cursor_adoption),
+        adoption_yearmonth = format(repo_cursor_adoption, "%Y-%m"),
+        repo_age_days = as.integer(difftime(Sys.Date(), repo_created, units = "days"))
+    ) %>%
+    filter(!is.na(repo_cursor_adoption))
+
+# View data structure
+glimpse(repos_df)
+```
+
+## Descriptive Statistics Table in LaTeX
+
+```{r}
+# Create a function to calculate descriptive statistics
+calc_stats <- function(x) {
+    c(
+        mean = mean(x, na.rm = TRUE),
+        std_dev = sd(x, na.rm = TRUE),
+        min = min(x, na.rm = TRUE),
+        q1 = quantile(x, 0.25, na.rm = TRUE),
+        median = median(x, na.rm = TRUE),
+        q3 = quantile(x, 0.75, na.rm = TRUE),
+        max = max(x, na.rm = TRUE)
+    )
+}
+
+# Calculate descriptive statistics for the selected metrics
+metrics <- c(
+    "repo_age_days", "repo_stars", "repo_forks", "repo_contributors",
+    "repo_commits", "repo_issues", "repo_pulls"
+)
+
+stats_list <- repos_df %>%
+    select(all_of(metrics)) %>%
+    map(calc_stats)
+
+# For reference
+print(stats_list)
+
+# Create a data frame for the table
+stats_df <- data.frame(
+  Metric = c(
+    "Repository Age (days)",
+    "Stars",
+    "Forks",
+    "Contributors",
+    "Commits",
+    "Issues",
+    "Pull Requests"
+  ),
+  Mean = sapply(stats_list, function(x) round(x["mean"], 1)),
+  #`Std Dev` = sapply(stats_list, function(x) round(x["std_dev"], 1)),
+  Min = sapply(stats_list, function(x) round(x["min"], 1)),
+  `Q1 (25%)` = sapply(stats_list, function(x) round(x["q1.25%"], 1)),
+  Median = sapply(stats_list, function(x) round(x["median"], 1)),
+  `Q3 (75%)` = sapply(stats_list, function(x) round(x["q3.75%"], 1)),
+  Max = sapply(stats_list, function(x) round(x["max"], 1))
+)
+
+# Generate LaTeX table with fixes
+table_output <- kable(stats_df, format = "latex",
+      caption = "Descriptive Statistics of Repository Metrics",
+      booktabs = TRUE,
+      escape = FALSE)
+
+print(table_output)
+```
+
+## Distribution of Repository Primary Languages
+
+```{r}
+# Count repositories by primary language
+language_counts <- repos_df %>%
+    count(repo_primary_language) %>%
+    arrange(desc(n)) %>%
+    # Take top 15 languages for readability
+    slice_head(n = 15)
+
+# Plot language distribution
+p <- ggplot(language_counts, aes(x = reorder(repo_primary_language, n), y = n)) +
+    geom_bar(stat = "identity", fill = "steelblue") +
+    geom_text(aes(label = n), hjust = -0.2, size = 3) +
+    labs(
+        x = "Primary Language",
+        y = "Number of Repositories"
+    ) +
+    scale_y_continuous(expand = c(0, 0)) +
+    coord_flip(ylim = c(0, max(language_counts$n) * 1.1), clip = "off") +
+    theme(
+        axis.text.y = element_text(size = 9)
+    )
+
+print(p)
+
+# Save the plot
+ggsave("../plots/repo_language_distribution.pdf", plot = p, width = 7, height = 5)
+```

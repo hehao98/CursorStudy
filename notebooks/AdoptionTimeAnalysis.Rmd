@@ -66,7 +66,7 @@ p <- ggplot(adoption_counts, aes(x = adoption_yearmonth, y = n)) +
 
 print(p)
 
-ggsave("../plots/cursor_adoption_time.pdf", plot = p, width = 5, height = 3)
+ggsave("../plots/cursor_adoption_time.pdf", plot = p, width = 5, height = 2.5)
 ```
 
 ## Distribution of Repository Creation Time

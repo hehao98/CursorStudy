@@ -514,6 +514,8 @@ def main() -> None:
         contributor_df.to_csv(contributor_output, index=False)
         logging.info("Saved contributor time series data to %s", contributor_output)
 
+    # Avoid updating them because they are buggy for now
+    """
     if cursor_commits:
         cursor_commits_df = pd.DataFrame(cursor_commits)
         cursor_commits_df.to_csv(CURSOR_COMMITS_CSV, index=False)
@@ -529,6 +531,7 @@ def main() -> None:
             REPOS_CSV,
             len(adoption_dates),
         )
+    """
 
 
 if __name__ == "__main__":
