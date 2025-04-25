@@ -10,7 +10,11 @@ import pandas as pd
 from google.cloud import bigquery
 
 REPOS_CSV = Path(__file__).parent.parent / "data" / "repos.csv"
+MATCHING_CSV = Path(__file__).parent.parent / "data" / "matching.csv"
 REPO_EVENTS_OUTPUT_FILE = Path(__file__).parent.parent / "data" / "repo_events.csv"
+REPO_EVENTS_CONTROL_OUTPUT_FILE = (
+    Path(__file__).parent.parent / "data" / "repo_events_control.csv"
+)
 TIME_KEY = None
 REPO_QUERY = """
 SELECT type, created_at, repo.name as repo, actor.login as actor
@@ -27,6 +31,31 @@ def load_repos_with_cursor_adoption() -> List[str]:
     repos = cursor_repos["repo_name"].tolist()
     logging.info(f"Loaded {len(repos)} repos with Cursor adoption dates")
     return repos
+
+
+def load_control_repos() -> List[str]:
+    """Load control repositories from matching CSV file."""
+    if not os.path.exists(MATCHING_CSV):
+        logging.error(f"Matching CSV file not found: {MATCHING_CSV}")
+        return []
+
+    df = pd.read_csv(MATCHING_CSV)
+    control_repos = []
+    for i in range(1, 4):  # matched_control_1, matched_control_2, matched_control_3
+        col_name = f"matched_control_{i}"
+        if col_name in df.columns:
+            control_repos.extend(
+                [
+                    repo
+                    for repo in df[col_name].dropna().tolist()
+                    if isinstance(repo, str)
+                ]
+            )
+
+    # Remove duplicates
+    control_repos = list(set(control_repos))
+    logging.info(f"Loaded {len(control_repos)} control repositories")
+    return control_repos
 
 
 def format_bytes(bytes_val: int) -> str:
@@ -58,20 +87,13 @@ def estimate_query_cost(repos: List[str]) -> Tuple[float, float]:
 def fetch_events_from_bigquery(repos: List[str], output_path: str) -> None:
     """Fetch repo events from BigQuery and save to CSV."""
     if not repos:
-        logging.warning("No repos with Cursor adoption dates found")
+        logging.warning("No repos found to fetch events for")
         return
 
     logging.info(f"Preparing to fetch events for {len(repos)} repos")
     bytes_processed, cost = estimate_query_cost(repos)
     logging.info(f"Estimated query size: {format_bytes(bytes_processed)}")
     logging.info(f"Estimated cost: ${cost:.4f} USD")
-
-    if (
-        cost > 0.01
-        and input(f"Proceed with query (cost ~${cost:.4f})? (y/n): ").lower() != "y"
-    ):
-        logging.info("Query cancelled")
-        return
 
     client = bigquery.Client()
     job_config = bigquery.QueryJobConfig(
@@ -148,27 +170,39 @@ def update_repo_stats(metrics_df: pd.DataFrame, stats_file: str) -> None:
     logging.info(f"Updated {stats_file} with {len(metrics_df)} repo-time combinations")
 
 
-def add_event_metrics_to_repo_stats(aggregation: str) -> None:
+def add_event_metrics_to_repo_stats(aggregation: str, control: bool = False) -> None:
     """
     Add GitHub event metrics to repository statistics files.
 
     Args:
         aggregation: Either 'week' or 'month' for selecting which stats file to update
+        control: Whether to update control repository stats (default: False)
     """
-    if not os.path.exists(REPO_EVENTS_OUTPUT_FILE):
-        logging.error(f"Event data file not found: {REPO_EVENTS_OUTPUT_FILE}")
+    events_file = (
+        REPO_EVENTS_CONTROL_OUTPUT_FILE if control else REPO_EVENTS_OUTPUT_FILE
+    )
+    if not os.path.exists(events_file):
+        logging.error(f"Event data file not found: {events_file}")
         return
 
-    events_df = pd.read_csv(REPO_EVENTS_OUTPUT_FILE)
+    events_df = pd.read_csv(events_file)
     events_df["created_at"] = pd.to_datetime(events_df["created_at"])
 
-    stats_file = Path(__file__).parent.parent / "data" / f"ts_repos_{aggregation}ly.csv"
+    # Set the appropriate stats file path based on whether we're handling control repos
+    control_suffix = "_control" if control else ""
+    stats_file = (
+        Path(__file__).parent.parent
+        / "data"
+        / f"ts_repos{control_suffix}_{aggregation}ly.csv"
+    )
 
     if not os.path.exists(stats_file):
         logging.error(f"Repository stats file not found: {stats_file}")
         return
 
-    logging.info(f"Processing {aggregation}ly repository statistics...")
+    logging.info(
+        f"Processing {aggregation}ly repository{'_control' if control else ''} statistics..."
+    )
 
     # Choose the appropriate time format based on aggregation
     time_format = "%Y-%m" if aggregation == "month" else "%Y-W%W"
@@ -196,6 +230,11 @@ def main() -> None:
         action="store_true",
         help="Force fetching events even if the event file already exists",
     )
+    parser.add_argument(
+        "--control",
+        action="store_true",
+        help="Process control repositories instead of cursor repositories",
+    )
     args = parser.parse_args()
     TIME_KEY = args.aggregation
 
@@ -205,23 +244,31 @@ def main() -> None:
         handlers=[logging.StreamHandler(sys.stdout)],
     )
 
-    # Check if events file exists and fetch only if needed
-    if not os.path.exists(REPO_EVENTS_OUTPUT_FILE) or args.force_fetch:
-        if args.force_fetch and os.path.exists(REPO_EVENTS_OUTPUT_FILE):
-            logging.info(
-                f"Force fetching events (file already exists: {REPO_EVENTS_OUTPUT_FILE})"
-            )
-        else:
-            logging.info(f"Events file not found: {REPO_EVENTS_OUTPUT_FILE}")
+    # Determine which repositories to fetch and which output file to use
+    events_file = (
+        REPO_EVENTS_CONTROL_OUTPUT_FILE if args.control else REPO_EVENTS_OUTPUT_FILE
+    )
 
-        repos = load_repos_with_cursor_adoption()
-        fetch_events_from_bigquery(repos, REPO_EVENTS_OUTPUT_FILE)
+    # Check if events file exists and fetch only if needed
+    if not os.path.exists(events_file) or args.force_fetch:
+        if args.force_fetch and os.path.exists(events_file):
+            logging.info(f"Force fetching events (file already exists: {events_file})")
+        else:
+            logging.info(f"Events file not found: {events_file}")
+
+        # Load appropriate repositories based on --control flag
+        if args.control:
+            repos = load_control_repos()
+        else:
+            repos = load_repos_with_cursor_adoption()
+
+        fetch_events_from_bigquery(repos, events_file)
     else:
-        logging.info(f"Using existing events file: {REPO_EVENTS_OUTPUT_FILE}")
+        logging.info(f"Using existing events file: {events_file}")
         logging.info("Use --force-fetch to fetch events again if needed")
 
     # Always update metrics
-    add_event_metrics_to_repo_stats(args.aggregation)
+    add_event_metrics_to_repo_stats(args.aggregation, args.control)
 
 
 if __name__ == "__main__":
