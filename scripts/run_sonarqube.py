@@ -59,10 +59,15 @@ CLONE_DIR = SCRIPT_DIR.parent.parent / "CursorRepos"
 CONTROL_CLONE_DIR = SCRIPT_DIR.parent.parent / "ControlRepos"
 
 # Number of processes to use for parallel processing
-NUM_PROCESSES = 16  # if too much may crash Elastic Search
+NUM_PROCESSES = 8  # if too much may crash Elastic Search
 
-# Taking too long to analyze plus no metrics are able to be collected
-REPO_IGNORE = ["meshery/meshery", "swc-project/swc"]  # "dotCMS/core"]
+# Taking too long to analyze
+REPO_IGNORE = [
+    "meshery/meshery",
+    "swc-project/swc",
+    "djmonkeyuk/nms-base-builder",
+    "Azure/azure-rest-api-specs-examples",
+]
 
 
 def check_analysis_exists(project_key: str, version: str) -> bool:
@@ -380,7 +385,8 @@ def main() -> None:
         results = pool.starmap(process_repository, args_list, chunksize=1)
 
     updated_df = pd.concat(results)
-    updated_df.drop(columns=["technical_debt"], inplace=True)
+    if "technical_debt" in updated_df.columns:
+        updated_df.drop(columns=["technical_debt"], inplace=True)
     updated_df.rename(
         columns={
             "software_quality_maintainability_remediation_effort": "technical_debt"
