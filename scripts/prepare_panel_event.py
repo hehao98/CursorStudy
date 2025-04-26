@@ -4,7 +4,7 @@ Script to prepare panel event data for cursor adoption analysis.
 
 This script:
 1. Reads repositories data from repos.csv
-2. Reads time series data from ts_repos_{month/week}.csv
+2. Reads time series data from ts_repos_{month/week}.csv and ts_repos_control_{month/week}.csv
 3. Creates a panel dataset with lead and lag indicators for cursor adoption events
 4. Saves the results to panel_event_{weekly/monthly}.csv
 """
@@ -13,7 +13,7 @@ import argparse
 import logging
 import sys
 from pathlib import Path
-from typing import List
+from typing import List, Optional, Tuple
 
 import pandas as pd
 
@@ -173,9 +173,43 @@ def generate_lead_lag_indicators(
     return result_df.drop(columns=["time_dt"])
 
 
-def load_data(aggregation: str) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Load repository and time series data."""
-    ts_file = DATA_DIR / f"ts_repos_{aggregation}ly.csv"
+def process_control_repo_panel(
+    repo_name: str,
+    ts_df: pd.DataFrame,
+    aggregation: str,
+    lead_periods: range,
+    lag_periods: range,
+) -> pd.DataFrame:
+    """Generate panel data for a control repository without event indicators."""
+    # Get time series data for this repository
+    repo_ts = ts_df[ts_df["repo_name"] == repo_name].copy()
+
+    if repo_ts.empty:
+        logging.warning(
+            f"No time series data found for control repository: {repo_name}"
+        )
+        return None
+
+    # Add required columns with appropriate null/zero values
+    repo_ts["event"] = None
+    repo_ts["post_event"] = 0
+    repo_ts["time_to_event"] = None
+    repo_ts["time"] = repo_ts[aggregation]
+
+    # Add all lead and lag indicators as zeros
+    for lead in lead_periods:
+        repo_ts[f"lead_{lead}"] = 0
+
+    for lag in lag_periods:
+        repo_ts[f"lag_{lag}"] = 0
+
+    return repo_ts
+
+
+def load_data(aggregation: str) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """Load repository and time series data for both treatment and control groups."""
+    treatment_ts_file = DATA_DIR / f"ts_repos_{aggregation}ly.csv"
+    control_ts_file = DATA_DIR / f"ts_repos_control_{aggregation}ly.csv"
 
     # Read repository data
     logging.info(f"Reading repository data from {REPOS_CSV}")
@@ -187,17 +221,29 @@ def load_data(aggregation: str) -> tuple[pd.DataFrame, pd.DataFrame]:
         lambda x: pd.to_datetime(x).strftime(date_format)
     )
 
-    # Read time series data
-    logging.info(f"Reading time series data from {ts_file}")
-    ts_df = pd.read_csv(ts_file)
+    # Read treatment time series data
+    logging.info(f"Reading treatment time series data from {treatment_ts_file}")
+    treatment_ts_df = pd.read_csv(treatment_ts_file)
+
+    # Read control time series data
+    logging.info(f"Reading control time series data from {control_ts_file}")
+    control_ts_df = pd.read_csv(control_ts_file)
+
+    # Add treatment/control indicator
+    treatment_ts_df["is_treatment"] = 1
+    control_ts_df["is_treatment"] = 0
 
     # Pad missing time periods to ensure continuous time series data
-    ts_df = pad_missing_periods(
-        ts_df, group_columns=["repo_name"], time_col=aggregation
+    treatment_ts_df = pad_missing_periods(
+        treatment_ts_df, group_columns=["repo_name"], time_col=aggregation
     )
+    control_ts_df = pad_missing_periods(
+        control_ts_df, group_columns=["repo_name"], time_col=aggregation
+    )
+
     logging.info(f"Padded missing {aggregation}s in time series data")
 
-    return repos_df, ts_df
+    return repos_df, treatment_ts_df, control_ts_df
 
 
 def process_repo_panel(
@@ -253,23 +299,6 @@ def filter_panel_data(panel_df: pd.DataFrame, aggregation: str) -> pd.DataFrame:
     post_end_filter_count = len(panel_df)
     rows_filtered_end = post_start_filter_count - post_end_filter_count
 
-    # Add repository age in days
-    logging.info("Calculating repository age in days")
-    repo_creation_dates = dict(
-        zip(
-            pd.read_csv(REPOS_CSV)["repo_name"],
-            pd.to_datetime(pd.read_csv(REPOS_CSV)["repo_created"]).dt.tz_localize(None),
-        )
-    )
-    panel_df["age"] = panel_df.apply(
-        lambda row: (
-            (row["filter_date"] - repo_creation_dates.get(row["repo_name"])).days
-            if row["repo_name"] in repo_creation_dates
-            else None
-        ),
-        axis=1,
-    )
-
     # Drop the filtering column
     panel_df = panel_df.drop(columns=["filter_date"])
 
@@ -300,21 +329,15 @@ def reorder_columns(
     other_columns = [
         col
         for col in panel_df.columns
-        if col not in ["repo_name", aggregation, "time"] + event_columns
+        if col not in ["repo_name", aggregation, "time", "is_treatment"] + event_columns
     ]
 
     # Reorder columns
     panel_df = panel_df[
-        ["repo_name", aggregation, "time"] + event_columns + other_columns
+        ["repo_name", aggregation, "time", "is_treatment"]
+        + event_columns
+        + other_columns
     ]
-
-    # Move age to come right after lines_added
-    cols = panel_df.columns.tolist()
-    if "age" in cols and "lines_added" in cols:
-        lines_added_idx = cols.index("lines_added")
-        cols.remove("age")
-        cols.insert(lines_added_idx + 1, "age")
-        panel_df = panel_df[cols]
 
     return panel_df
 
@@ -329,34 +352,59 @@ def prepare_panel_data(aggregation: str) -> pd.DataFrame:
         lead_periods = range(1, MONTH_LEAD_AND_LAG + 1)
         lag_periods = range(0, MONTH_LEAD_AND_LAG + 1)
 
-    # Load data
-    repos_df, ts_df = load_data(aggregation)
+    # Load data for both treatment and control groups
+    repos_df, treatment_ts_df, control_ts_df = load_data(aggregation)
 
-    # Process each repository
-    panel_dfs = []
-    processed_repos = 0
+    # Process treatment repositories
+    treatment_panel_dfs = []
+    processed_treatment_repos = 0
 
     for _, repo in repos_df.iterrows():
         repo_panel = process_repo_panel(
             repo_name=repo["repo_name"],
             adoption_time=repo["adoption_time"],
-            ts_df=ts_df,
+            ts_df=treatment_ts_df,
             aggregation=aggregation,
             lead_periods=lead_periods,
             lag_periods=lag_periods,
         )
 
         if repo_panel is not None:
-            panel_dfs.append(repo_panel)
-            processed_repos += 1
+            treatment_panel_dfs.append(repo_panel)
+            processed_treatment_repos += 1
 
-    if not panel_dfs:
+    # Process control repositories
+    control_panel_dfs = []
+    processed_control_repos = 0
+
+    for repo_name in control_ts_df["repo_name"].unique():
+        repo_panel = process_control_repo_panel(
+            repo_name=repo_name,
+            ts_df=control_ts_df,
+            aggregation=aggregation,
+            lead_periods=lead_periods,
+            lag_periods=lag_periods,
+        )
+
+        if repo_panel is not None:
+            control_panel_dfs.append(repo_panel)
+            processed_control_repos += 1
+
+    if not treatment_panel_dfs and not control_panel_dfs:
         logging.error("No repositories with sufficient data for panel analysis")
         return pd.DataFrame()
 
     # Combine all repository panel data
+    panel_dfs = []
+    if treatment_panel_dfs:
+        panel_dfs.extend(treatment_panel_dfs)
+    if control_panel_dfs:
+        panel_dfs.extend(control_panel_dfs)
+
     panel_df = pd.concat(panel_dfs, ignore_index=True)
-    logging.info(f"Processed {processed_repos} repositories for panel analysis")
+    logging.info(
+        f"Processed {processed_treatment_repos} treatment repositories and {processed_control_repos} control repositories for panel analysis"
+    )
 
     # Filter data and add repository age
     panel_df = filter_panel_data(panel_df, aggregation)

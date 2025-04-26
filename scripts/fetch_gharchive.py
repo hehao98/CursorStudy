@@ -123,8 +123,14 @@ def fetch_events_from_bigquery(repos: List[str], output_path: str) -> None:
 
 def compute_event_metrics(events_df: pd.DataFrame, time_format: str) -> pd.DataFrame:
     """Compute event metrics from GitHub events data."""
+    # Format time periods
     events_df["time_period"] = events_df["created_at"].dt.strftime(time_format)
 
+    # Get first event date for each repository (make timezone naive)
+    repo_first_dates = events_df.groupby("repo")["created_at"].min().reset_index()
+    repo_first_dates["created_at"] = repo_first_dates["created_at"].dt.tz_localize(None)
+
+    # Calculate base metrics
     metrics = (
         events_df.groupby(["repo", "time_period"])
         .agg(
@@ -136,6 +142,33 @@ def compute_event_metrics(events_df: pd.DataFrame, time_format: str) -> pd.DataF
         .rename(columns={"repo": "repo_name", "time_period": TIME_KEY})
     )
 
+    # Convert time periods to actual dates
+    if time_format == "%Y-%m":
+        metrics["period_date"] = pd.to_datetime(metrics[TIME_KEY] + "-01")
+    else:  # Weekly format
+        metrics["period_date"] = pd.to_datetime(
+            metrics[TIME_KEY]
+            .str.replace("W", "")
+            .apply(lambda x: f"{x.split('-')[0]}-{int(x.split('-')[1]):02d}-01")
+        )
+
+    # Add first event date to metrics
+    metrics = pd.merge(
+        metrics,
+        repo_first_dates.rename(
+            columns={"repo": "repo_name", "created_at": "first_date"}
+        ),
+        on="repo_name",
+        how="left",
+    )
+
+    # Calculate repository age (days since first event)
+    metrics["age"] = (metrics["period_date"] - metrics["first_date"]).dt.days
+
+    # Remove temporary columns
+    metrics = metrics.drop(["period_date", "first_date"], axis=1)
+
+    logging.info(metrics)
     return metrics
 
 
@@ -145,11 +178,13 @@ def update_repo_stats(metrics_df: pd.DataFrame, stats_file: str) -> None:
         logging.error(f"Repository stats file not found: {stats_file}")
         return
 
-    stats_df = pd.read_csv(stats_file)
-    result_df = pd.merge(stats_df, metrics_df, on=["repo_name", TIME_KEY], how="left")
+    metric_cols = ["stars", "issues", "issue_comments", "age"]
+    stats_df = pd.read_csv(stats_file).drop(columns=metric_cols, errors="ignore")
 
-    metric_cols = ["stars", "issues", "issue_comments"]
-    result_df[metric_cols] = result_df[metric_cols].fillna(0).astype(int)
+    result_df = pd.merge(stats_df, metrics_df, on=["repo_name", TIME_KEY], how="left")
+    for col in metric_cols:
+        result_df[col] = result_df[col].fillna(0).astype(int)
+    result_df["age"] = result_df["age"].map(lambda x: 0 if x < 0 else x)
 
     # Get the existing columns and find the position of "contributors"
     existing_cols = list(stats_df.columns)
