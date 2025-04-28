@@ -27,18 +27,18 @@ panel_data <- fread("../data/panel_event_monthly.csv")
 # panel_data <- panel_data[panel_data$commits > 0] # exclude inactive months
 
 # Compute churn
-#panel_data$churn <- panel_data$lines_removed / panel_data$lines_added
+# panel_data$churn <- panel_data$lines_removed / panel_data$lines_added
 
 # Alternative code quality metrics
 panel_data <- panel_data %>%
-  arrange(repo_name, time) %>%
-  group_by(repo_name) %>%
-  mutate(
-    delta_code_smells = code_smells - lag(code_smells),
-    delta_vulnerabilities = vulnerabilities - lag(vulnerabilities),
-    delta_bugs = bugs - lag(bugs)
-  ) %>%
-  ungroup()
+    arrange(repo_name, time) %>%
+    group_by(repo_name) %>%
+    mutate(
+        delta_code_smells = code_smells - lag(code_smells),
+        delta_vulnerabilities = vulnerabilities - lag(vulnerabilities),
+        delta_bugs = bugs - lag(bugs)
+    ) %>%
+    ungroup()
 
 panel_data$repo_name <- as.factor(panel_data$repo_name)
 panel_data$time <- as.factor(panel_data$time)
@@ -52,7 +52,7 @@ glimpse(panel_data)
 outcome_variables_its <- c(
     "log(commits + 1)" = "Commits",
     "log(lines_added + 1)" = "Lines Added",
-    #"log(churn + 1)" = "Churn",
+    # "log(churn + 1)" = "Churn",
     "log(code_smells + 1)" = "Code Smells",
     "log(vulnerabilities + 1)" = "Vulnerabilities",
     "log(bugs + 1)" = "Bugs",
@@ -64,7 +64,7 @@ outcome_variables_its <- c(
 outcome_variables <- c(
     "log(commits + 1)" = "Commits",
     "log(lines_added + 1)" = "Lines Added",
-    #"log(churn + 1)" = "Churn",
+    # "log(churn + 1)" = "Churn",
     "log(delta_code_smells + 1)" = "New Code Smells",
     "log(delta_vulnerabilities + 1)" = "New Vulnerabilities",
     "log(delta_bugs + 1)" = "New Bugs",
@@ -142,61 +142,95 @@ modelsummary(did_models,
 )
 ```
 
-## Interrupted Time Series
+## Treatment Effect Heterogeneity Analysis
 
-```{r its_setup}
-its_data <- panel_data %>%
-  group_by(repo_name) %>%
-  mutate(
-    time_numeric = as.numeric(as.factor(time)),
-    intervention = post_event,
-    time_after_intervention = ifelse(post_event == 1, time_numeric - min(time_numeric[post_event == 1]), 0)
-  ) %>%
-  ungroup()
+```{r heterogeneity_analysis}
+heterogeneity_data <- panel_data %>%
+    group_by(repo_name) %>%
+    mutate(
+        age_at_treatment = age[time == event][1],
+        ncloc_at_treatment = ncloc[time == event][1]
+    ) %>%
+    ungroup()
 
-glimpse(its_data)
-```
+cursor_commits_data <- panel_data %>%
+    filter(post_event == 1) %>%
+    group_by(repo_name) %>%
+    summarize(total_cursor_commits = sum(commits, na.rm = TRUE)) %>%
+    ungroup()
 
-```{r its_models}
-# Function to fit ITS model
-fit_its_model <- function(outcome_var, data) {
-  formula_str <- paste0(
-    outcome_var, " ~ time_numeric + intervention + time_after_intervention +
-    log(ncloc + 1) + log(age + 1) + log(contributors + 1) + log(stars + 1) +
-    log(issues + 1) | repo_name"
-  )
+heterogeneity_data <- heterogeneity_data %>%
+    left_join(cursor_commits_data, by = "repo_name")
 
-  model <- feols(as.formula(formula_str), data = data)
+age_median <- median(heterogeneity_data$age_at_treatment[!is.na(heterogeneity_data$age_at_treatment)])
+ncloc_median <- median(heterogeneity_data$ncloc_at_treatment[!is.na(heterogeneity_data$ncloc_at_treatment)])
+cursor_commits_median <- median(cursor_commits_data$total_cursor_commits)
+print(paste("Age Median:", age_median))
+print(paste("NCLoc Median:", ncloc_median))
+print(paste("Cursor Commits Median:", cursor_commits_median))
 
-  return(model)
-}
+heterogeneity_data <- heterogeneity_data %>%
+    mutate(
+        high_age = age_at_treatment > age_median,
+        high_ncloc = ncloc_at_treatment > ncloc_median,
+        high_cursor_commits = total_cursor_commits > cursor_commits_median
+    )
 
-# Fit ITS models for each outcome
-its_models <- list()
-for (outcome in names(outcome_variables_its)) {
-  its_models[[outcome_variables_its[outcome]]] <- fit_its_model(outcome, its_data)
-}
+low_age_data <- heterogeneity_data %>% filter(!high_age)
+high_age_data <- heterogeneity_data %>% filter(high_age)
+low_ncloc_data <- heterogeneity_data %>% filter(!high_ncloc)
+high_ncloc_data <- heterogeneity_data %>% filter(high_ncloc)
+low_cursor_commits_data <- heterogeneity_data %>% filter(!high_cursor_commits)
+high_cursor_commits_data <- heterogeneity_data %>% filter(high_cursor_commits)
 
-# Create coefficient map with better labels
-cm <- c(
-  "time_numeric" = "Time",
-  "intervention" = "Intervention (Post Cursor)",
-  "time_after_intervention" = "Time After Intervention",
-  "log(ncloc + 1)" = "Log Lines of Code",
-  "log(age + 1)" = "Log Age (days)",
-  "log(contributors + 1)" = "Log Contributors",
-  "log(stars + 1)" = "Log Stars",
-  "log(issues + 1)" = "Log Issues"
+heterogeneity_outcomes <- c(
+    "log(commits + 1)" = "Commits",
+    "log(lines_added + 1)" = "Lines Added",
+    "log(delta_code_smells + 1)" = "New Code Smells",
+    "log(delta_bugs + 1)" = "New Bugs",
+    "duplicated_lines_density" = "Duplicated Lines Density",
+    "log(cognitive_complexity + 1)" = "Cognitive Complexity"
 )
 
-# Generate model summary table
-modelsummary(
-  its_models,
-  title = "Interrupted Time Series Models: Effects of Cursor Adoption",
-  stars = TRUE,
-  gof_map = c("nobs", "r.squared", "adj.r.squared"),
-  coef_map = cm,
-  fmt = 3
+young_models <- fit_multiple_did_models(heterogeneity_outcomes, low_age_data)
+old_models <- fit_multiple_did_models(heterogeneity_outcomes, high_age_data)
+small_models <- fit_multiple_did_models(heterogeneity_outcomes, low_ncloc_data)
+large_models <- fit_multiple_did_models(heterogeneity_outcomes, high_ncloc_data)
+low_commits_models <- fit_multiple_did_models(heterogeneity_outcomes, low_cursor_commits_data)
+high_commits_models <- fit_multiple_did_models(heterogeneity_outcomes, high_cursor_commits_data)
+
+extract_treatment_effect <- function(model) {
+    coef_table <- summary(model)$coeftable
+    estimate <- coef_table["post_event", "Estimate"]
+    p_value <- coef_table["post_event", "Pr(>|t|)"]
+    stars <- ifelse(p_value < 0.001, "***",
+        ifelse(p_value < 0.01, "**",
+            ifelse(p_value < 0.05, "*", "")
+        )
+    )
+    result <- paste0(sprintf("%.3f", estimate), stars)
+    return(result)
+}
+
+heterogeneity_results <- data.frame(
+    Outcome = names(heterogeneity_outcomes),
+    YoungProjects = sapply(young_models, extract_treatment_effect),
+    OldProjects = sapply(old_models, extract_treatment_effect),
+    SmallProjects = sapply(small_models, extract_treatment_effect),
+    LargeProjects = sapply(large_models, extract_treatment_effect),
+    LowCursorCommits = sapply(low_commits_models, extract_treatment_effect),
+    HighCursorCommits = sapply(high_commits_models, extract_treatment_effect)
+)
+
+rownames(heterogeneity_results) <- heterogeneity_outcomes
+
+knitr::kable(heterogeneity_results,
+    caption = "Treatment Effect Heterogeneity by Project Age, Size, and Cursor Usage",
+    col.names = c(
+        "Outcome", "Young Projects", "Old Projects",
+        "Small Projects", "Large Projects",
+        "Low Cursor Commits", "High Cursor Commits"
+    )
 )
 ```
 
@@ -232,7 +266,7 @@ get_event_data <- function(model, outcome_name) {
     ci <- confint(model)
     pvals <- summary(model)$coeftable[, 4]
 
-    time_periods <- c(-6:6)  # Changed to include 0
+    time_periods <- c(-6:6) # Changed to include 0
     estimates <- numeric(length(time_periods))
     conf_low <- numeric(length(time_periods))
     conf_high <- numeric(length(time_periods))
@@ -248,7 +282,6 @@ get_event_data <- function(model, outcome_name) {
         conf_high[i] <- ci[var_name, 2]
         p_values[i] <- pvals[var_name]
 
-        # Determine significance (p < 0.05)
         is_significant[i] <- p_values[i] < 0.05
     }
 
