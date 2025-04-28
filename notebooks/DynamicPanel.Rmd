@@ -1,0 +1,97 @@
+---
+title: "Dynamic Panel Analysis of Cursor Adoption Effects"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+## Introduction
+
+This notebook implements a dynamic panel model using Generalized Method of Moments (GMM) to analyze how past code quality metrics affect current development productivity, while controlling for dynamics and endogeneity.
+
+## Loading Required Packages
+
+```{r load_packages}
+library(tidyverse)
+library(data.table)
+library(modelsummary)
+library(ggplot2)
+library(plm)
+```
+
+## Loading and Preparing the Data
+
+```{r load_data}
+panel_data <- fread("../data/panel_event_monthly.csv")
+
+dynamic_data <- panel_data %>%
+    mutate(time_date = as.Date(paste0(time, "-01"))) %>%
+    arrange(repo_name, time_date) %>%
+    group_by(repo_name) %>%
+    mutate(
+        delta_code_smells = code_smells - lag(code_smells),
+        delta_bugs = bugs - lag(bugs),
+    ) %>%
+    ungroup() %>%
+    # Remove rows where delta_code_smells or delta_bugs are NA
+    filter(!is.na(delta_code_smells) &
+        !is.na(delta_bugs) & !is.na(cognitive_complexity) &
+        !is.na(lines_added) & !is.na(commits)) %>%
+    mutate(
+        id = as.factor(repo_name),
+        time = as.numeric(factor(time_date))
+    )
+
+pdyn <- pdata.frame(dynamic_data, index = c("id", "time"))
+
+# log transform relavant variables
+pdyn <- pdyn %>%
+    mutate(
+        commits = log(commits + 1),
+        lines_added = log(lines_added + 1),
+        cognitive_complexity = log(cognitive_complexity + 1),
+        delta_code_smells = log(delta_code_smells + 1),
+        delta_bugs = log(delta_bugs + 1)
+    )
+
+glimpse(pdyn)
+```
+
+## Fitting Dynamic Panel Model using GMM
+
+```{r dynamic_model_lines_added}
+dynamic_model <- pgmm(
+    formula = lines_added ~ lag(lines_added, 1) + lag(lines_added, 2) + lag(cognitive_complexity, 1) +
+        lag(code_smells, 1) + lag(bugs, 1) + post_event +
+        log(ncloc + 1) + log(age + 1) + log(contributors + 1) + log(stars + 1) +
+        log(issues + 1) |
+        lag(lines_added, 3:6),
+    data = pdyn,
+    effect = "individual",
+    model = "onestep",
+    transformation = "d",
+    collapse = TRUE
+)
+
+summary(dynamic_model)
+```
+
+
+```{r dynamic_model_commits}
+dynamic_model <- pgmm(
+    formula = commits ~ lag(commits, 1) + lag(commits, 2) + lag(cognitive_complexity, 1) +
+        lag(code_smells, 1) + lag(bugs, 1) + post_event +
+        log(ncloc + 1) + log(age + 1) + log(contributors + 1) + log(stars + 1) +
+        log(issues + 1) |
+        lag(commits, 3:6),
+    data = pdyn,
+    effect = "individual",
+    model = "onestep",
+    transformation = "d",
+    collapse = TRUE
+)
+
+summary(dynamic_model)
+```
