@@ -23,6 +23,129 @@ WHERE repo.name IN UNNEST(@repos)
 ORDER BY repo, created_at
 """
 
+DYNAMIC_METRICS = [
+    "commits",
+    "lines_added",
+    "lines_removed",
+    "contributors",
+    "stars",
+    "issues",
+    "issue_comments",
+    "cursor_commits",
+]
+ACCUMULATIVE_METRICS = [
+    "ncloc",
+    "bugs",
+    "vulnerabilities",
+    "code_smells",
+    "duplicated_lines_density",
+    "comment_lines_density",
+    "cognitive_complexity",
+    "technical_debt",
+]
+
+
+def pad_missing_periods(
+    ts_df: pd.DataFrame, group_columns: List[str], time_col: str = "week"
+) -> pd.DataFrame:
+    """
+    Pad missing time periods (weeks or months) in time series data.
+
+    Args:
+        ts_df: DataFrame containing time series data
+        group_columns: Columns to group by
+        time_col: Time column name ('week' or 'month')
+    Returns:
+        DataFrame with padded time periods for all entities
+    """
+    padded_ts_dfs = []
+    for group_values, group_data in ts_df.groupby(group_columns):
+        if not isinstance(group_values, tuple):
+            group_values = (group_values,)
+
+        periods = sorted(group_data[time_col].unique())
+
+        if len(periods) <= 1:
+            padded_ts_dfs.append(group_data)
+            continue
+
+        # Parse period format strings to dates
+        if time_col == "week":
+            # Convert format like "2023-W01" to datetime objects
+            start_date = pd.to_datetime(periods[0] + "-1", format="%Y-W%W-%w")
+            end_date = pd.to_datetime(periods[-1] + "-1", format="%Y-W%W-%w")
+            freq = "W"
+            date_format = "%Y-W%W"
+        else:  # month
+            # Convert format like "2023-01" to datetime objects
+            start_date = pd.to_datetime(periods[0] + "-01", format="%Y-%m-%d")
+            end_date = pd.to_datetime(periods[-1] + "-01", format="%Y-%m-%d")
+            freq = "MS"  # Month start frequency
+            date_format = "%Y-%m"
+
+        # Determine all periods that should exist in the date range
+        all_periods = (
+            pd.date_range(
+                start=start_date,
+                end=end_date,
+                freq=freq,
+            )
+            .strftime(date_format)
+            .tolist()
+        )
+
+        # Create a dataframe with all periods and the group values
+        full_periods_df = pd.DataFrame({time_col: all_periods})
+        for i, col in enumerate(group_columns):
+            full_periods_df[col] = group_values[i]
+
+        # Merge with existing data and fill missing values
+        merged_df = pd.merge(
+            full_periods_df, group_data, on=group_columns + [time_col], how="left"
+        )
+
+        # Fill dynamic metrics with zeros
+        for col in DYNAMIC_METRICS:
+            if col in merged_df.columns:
+                merged_df[col] = merged_df[col].fillna(0)
+
+        # Forward-fill accumulative metrics from previous values
+        for col in ACCUMULATIVE_METRICS:
+            if col in merged_df.columns:
+                merged_df[col] = merged_df[col].ffill()
+
+        # Handle repository age as a special accumulative metric
+        if "age" in merged_df.columns:
+            # Sort by time column
+            merged_df = merged_df.sort_values(time_col)
+
+            # Find the first non-null age value
+            first_age = (
+                merged_df["age"].dropna().iloc[0]
+                if not merged_df["age"].dropna().empty
+                else 0
+            )
+
+            # Calculate the period index for each row
+            merged_df["_period_idx"] = range(len(merged_df))
+
+            # Calculate the first period with data
+            first_period_idx = merged_df.loc[
+                merged_df["age"].notna(), "_period_idx"
+            ].min()
+
+            # Calculate age as first_age + (current_period - first_period)
+            merged_df["age"] = (
+                first_age + (merged_df["_period_idx"] - first_period_idx) * 30
+            )
+
+            # Drop temporary column
+            merged_df = merged_df.drop(columns=["_period_idx"])
+
+        padded_ts_dfs.append(merged_df)
+
+    return pd.concat(padded_ts_dfs, ignore_index=True)
+
 
 def load_repos_with_cursor_adoption() -> List[str]:
     """Load repos with Cursor adoption dates from CSV."""
@@ -172,7 +295,9 @@ def compute_event_metrics(events_df: pd.DataFrame, time_format: str) -> pd.DataF
     return metrics
 
 
-def update_repo_stats(metrics_df: pd.DataFrame, stats_file: str) -> None:
+def update_repo_stats(
+    metrics_df: pd.DataFrame, stats_file: str, aggregation: str
+) -> None:
     """Update repository statistics file with event metrics."""
     if not os.path.exists(stats_file):
         logging.error(f"Repository stats file not found: {stats_file}")
@@ -180,6 +305,10 @@ def update_repo_stats(metrics_df: pd.DataFrame, stats_file: str) -> None:
 
     metric_cols = ["stars", "issues", "issue_comments", "age"]
     stats_df = pd.read_csv(stats_file).drop(columns=metric_cols, errors="ignore")
+
+    stats_df = pad_missing_periods(
+        stats_df, group_columns=["repo_name"], time_col=aggregation
+    )
 
     result_df = pd.merge(stats_df, metrics_df, on=["repo_name", TIME_KEY], how="left")
     for col in metric_cols:
@@ -244,7 +373,7 @@ def add_event_metrics_to_repo_stats(aggregation: str, control: bool = False) -> 
 
     # Compute metrics and update the stats file
     metrics = compute_event_metrics(events_df, time_format)
-    update_repo_stats(metrics, stats_file)
+    update_repo_stats(metrics, stats_file, aggregation)
 
 
 def main() -> None:

@@ -1,0 +1,181 @@
+---
+title: "The Impact of Cursor Adoption on Velocity and Quality - DiD Package Approach"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+## Loading Required Packages
+
+```{r load_packages}
+library(did)
+library(tidyverse)
+library(ggplot2)
+library(data.table)
+library(modelsummary)
+```
+
+## Loading and Preparing the Data
+
+```{r load_data}
+panel_data <- fread("../data/panel_event_monthly.csv")
+
+# Convert variables to DiD required format
+panel_data$repo_name <- as.numeric(factor(panel_data$repo_name))
+panel_data$time <- as.numeric(gsub("-", "", panel_data$time))
+panel_data$event[!is.na(panel_data$event)] <- as.numeric(
+    gsub("-", "", panel_data$event[!is.na(panel_data$event)]))
+panel_data$event[is.na(panel_data$event)] <- 0
+panel_data <- panel_data[panel_data$event < 202401 | panel_data$event > 202407]
+panel_data$event <- as.integer(panel_data$event)
+
+# Log transform skewed variables
+panel_data$commits <- log(panel_data$commits + 1)
+panel_data$lines_added <- log(panel_data$lines_added + 1)
+panel_data$code_smells <- log(panel_data$code_smells + 1)
+panel_data$vulnerabilities <- log(panel_data$vulnerabilities + 1)
+panel_data$bugs <- log(panel_data$bugs + 1)
+panel_data$cognitive_complexity <- log(panel_data$cognitive_complexity + 1)
+panel_data$age <- log(panel_data$age + 1)
+panel_data$contributors <- log(panel_data$contributors + 1)
+panel_data$stars <- log(panel_data$stars + 1)
+panel_data$issues <- log(panel_data$issues + 1)
+panel_data$issue_comments <- log(panel_data$issue_comments + 1)
+
+glimpse(panel_data)
+```
+
+## DiD Analysis with DiD Package
+
+```{r did_analysis}
+run_did_analysis <- function(outcome_var, data) {
+    did_result <- att_gt(
+        yname = outcome_var,
+        gname = "event",
+        idname = "repo_name",
+        tname = "time",
+        xformla = ~ ncloc + age + contributors + stars + issues,
+        data = data,
+        panel = TRUE,
+        allow_unbalanced_panel = TRUE,
+        anticipation = 1
+    )
+
+    return(did_result)
+}
+
+# List of outcome variables
+outcome_vars <- c(
+    "commits",
+    "lines_added",
+    "code_smells",
+    "vulnerabilities",
+    "bugs",
+    "comment_lines_density",
+    "duplicated_lines_density",
+    "cognitive_complexity"
+)
+
+# Run DiD for each outcome and store results
+did_results <- list()
+for (var in outcome_vars) {
+    did_results[[var]] <- run_did_analysis(var, panel_data)
+}
+```
+
+## Aggregate Treatment Effects
+
+```{r aggregate_effects}
+# Function to get aggregated treatment effects
+get_aggregate_effects <- function(did_result) {
+    agg <- aggte(did_result, type = "simple")
+    print(summary(agg))
+    return(agg)
+}
+
+# Calculate aggregate effects for each outcome
+agg_effects <- lapply(did_results, get_aggregate_effects)
+
+# Create a dataframe with all aggregate effects
+agg_df <- data.frame(
+    Outcome = names(agg_effects),
+    Estimate = sapply(agg_effects, function(x) x$overall.att),
+    SE = sapply(agg_effects, function(x) x$overall.se),
+    CI_Lower = sapply(agg_effects, function(x) x$overall.att - 1.96 * x$overall.se),
+    CI_Upper = sapply(agg_effects, function(x) x$overall.att + 1.96 * x$overall.se)
+)
+
+# Clean outcome names for display
+agg_df$Outcome <- gsub("log\\((.+) \\+ 1\\)", "\\1", agg_df$Outcome)
+agg_df$Outcome <- gsub("_", " ", agg_df$Outcome)
+agg_df$Outcome <- tools::toTitleCase(agg_df$Outcome)
+
+# Display aggregate effects
+knitr::kable(agg_df,
+    digits = 3,
+    caption = "Aggregate Treatment Effects of Cursor Adoption"
+)
+```
+
+## Dynamic Treatment Effects (Event Study)
+
+```{r event_study, fig.width=12, fig.height=8}
+# Function to plot event study for a given outcome
+plot_event_study <- function(did_result, title) {
+    # Calculate dynamic effects
+    dynamic_effects <- aggte(did_result, type = "dynamic", min_e = -6, max_e = 6)
+
+    # Create a data frame for plotting
+    plot_data <- data.frame(
+        time = dynamic_effects$egt,
+        estimate = dynamic_effects$att.egt,
+        conf.low = dynamic_effects$att.egt - 1.96 * dynamic_effects$se.egt,
+        conf.high = dynamic_effects$att.egt + 1.96 * dynamic_effects$se.egt,
+        is_significant = (dynamic_effects$att.egt - 1.96 * dynamic_effects$se.egt > 0) |
+                         (dynamic_effects$att.egt + 1.96 * dynamic_effects$se.egt < 0)
+    )
+
+    # Plot
+    ggplot(plot_data, aes(x = time, y = estimate)) +
+        geom_point(aes(shape = is_significant), size = 3) +
+        scale_shape_manual(values = c("FALSE" = 1, "TRUE" = 16), labels = c("FALSE" = "Not Significant", "TRUE" = "Significant *")) +
+        geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.2) +
+        geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+        geom_vline(xintercept = 0, linetype = "dashed", color = "blue") +
+        labs(
+            title = paste("Event Study:", title),
+            x = "Months Relative to Cursor Adoption",
+            y = "Treatment Effect",
+            shape = "Significance"
+        ) +
+        theme_minimal()
+}
+
+# Select key outcomes for visualization
+key_outcomes <- c(
+    "commits", "lines_added",
+    "cognitive_complexity", "duplicated_lines_density"
+)
+key_titles <- c("Commits", "Lines Added", "Cognitive Complexity", "Duplicated Lines Density")
+
+# Create plot list (only include valid plots)
+plot_list <- list()
+for (i in seq_along(key_outcomes)) {
+    if (key_outcomes[i] %in% names(did_results)) {
+        plot_list[[length(plot_list) + 1]] <- plot_event_study(did_results[[key_outcomes[i]]], key_titles[i])
+    }
+}
+
+# Combine plots if we have any
+if (length(plot_list) > 0) {
+    if (length(plot_list) == 1) {
+        # If only one plot, just display it
+        plot_list[[1]]
+    } else {
+        # If multiple plots, use grid.arrange
+        gridExtra::grid.arrange(grobs = plot_list, ncol = 2)
+    }
+}
+```

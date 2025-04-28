@@ -15,6 +15,7 @@ library(tidyverse)
 library(ggplot2)
 library(data.table)
 library(modelsummary)
+library(corrplot)
 ```
 
 ## Loading and Preparing the Data
@@ -22,10 +23,34 @@ library(modelsummary)
 ```{r load_data}
 panel_data <- fread("../data/panel_event_monthly.csv")
 
+#panel_data <- panel_data[panel_data$is_treatment == 1]
+#panel_data <- panel_data[panel_data$commits > 0]
+
 panel_data$repo_name <- as.factor(panel_data$repo_name)
 panel_data$time <- as.factor(panel_data$time)
 
 glimpse(panel_data)
+```
+
+## Correlation Analysis of Covariates
+
+```{r correlation_analysis}
+# Select covariates
+covariates <- panel_data[, c("ncloc", "age", "contributors", "stars", "issues", "issue_comments")]
+
+# Compute correlation matrix
+cor_matrix <- cor(covariates, use = "pairwise.complete.obs")
+
+# Display correlation matrix
+knitr::kable(round(cor_matrix, 3), caption = "Correlation Matrix of Covariates")
+
+# Visualization of correlation matrix
+corrplot(cor_matrix,
+    method = "circle", type = "upper",
+    tl.col = "black", tl.srt = 45,
+    title = "Correlation Plot of Covariates",
+    mar = c(0, 0, 1, 0)
+)
 ```
 
 ## Base DiD Model
@@ -35,7 +60,7 @@ fit_did_model <- function(outcome_var, data) {
     formula_str <- paste0(
         outcome_var, " ~ post_event + log(ncloc + 1) + log(age + 1) +
     log(contributors + 1) + log(stars + 1) +
-    log(issues + 1) + log(issue_comments + 1) | repo_name + time"
+    log(issues + 1) | repo_name + time"
     )
 
     model <- feols(as.formula(formula_str), data = data)
@@ -91,7 +116,7 @@ fit_event_study <- function(outcome_var, data) {
         outcome_var, " ~ lead_6 + lead_5 + lead_4 + lead_3 + lead_2 +
         lag_0 + lag_1 + lag_2 + lag_3 + lag_4 + lag_5 + lag_6 +
         log(ncloc + 1) + log(age + 1) + log(contributors + 1) + log(stars + 1) +
-        log(issues + 1) + log(issue_comments + 1) | repo_name + time"
+        log(issues + 1) | repo_name + time"
     )
 
     model <- feols(as.formula(formula_str), data = data)
@@ -103,7 +128,7 @@ event_models <- list(
     commits = fit_event_study("log(commits + 1)", panel_data),
     lines = fit_event_study("log(lines_added + 1)", panel_data),
     complexity = fit_event_study("log(cognitive_complexity + 1)", panel_data),
-    code_smells = fit_event_study("log(code_smells + 1)", panel_data)
+    duplicated_lines_density = fit_event_study("duplicated_lines_density", panel_data)
 )
 
 # Function to extract coefficients and CIs
@@ -148,7 +173,7 @@ plot_data <- rbind(
     get_event_data(event_models$commits, "Commits"),
     get_event_data(event_models$lines, "Lines Added"),
     get_event_data(event_models$complexity, "Cognitive Complexity"),
-    get_event_data(event_models$code_smells, "Code Smells")
+    get_event_data(event_models$duplicated_lines_density, "Duplicated Lines Density")
 )
 
 # Plot all outcomes

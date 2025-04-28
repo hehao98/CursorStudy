@@ -27,99 +27,6 @@ MONTH_LEAD_AND_LAG = 6
 START_DATE = "2024-01-01"
 END_DATE = "2025-03-31"  # Drop anything beyond this to avoid incomplete data
 
-DYNAMIC_METRICS = [
-    "commits",
-    "lines_added",
-    "contributors",
-    "stars",
-    "issues",
-    "issue_comments",
-]
-ACCUMULATIVE_METRICS = [
-    "ncloc",
-    "bugs",
-    "vulnerabilities",
-    "code_smells",
-    "duplicated_lines_density",
-    "comment_lines_density",
-    "cognitive_complexity",
-    "technical_debt",
-]
-
-
-def pad_missing_periods(
-    ts_df: pd.DataFrame, group_columns: List[str], time_col: str = "week"
-) -> pd.DataFrame:
-    """
-    Pad missing time periods (weeks or months) in time series data.
-
-    Args:
-        ts_df: DataFrame containing time series data
-        group_columns: Columns to group by
-        time_col: Time column name ('week' or 'month')
-    Returns:
-        DataFrame with padded time periods for all entities
-    """
-    padded_ts_dfs = []
-    for group_values, group_data in ts_df.groupby(group_columns):
-        if not isinstance(group_values, tuple):
-            group_values = (group_values,)
-
-        periods = sorted(group_data[time_col].unique())
-
-        if len(periods) <= 1:
-            padded_ts_dfs.append(group_data)
-            continue
-
-        # Parse period format strings to dates
-        if time_col == "week":
-            # Convert format like "2023-W01" to datetime objects
-            start_date = pd.to_datetime(periods[0] + "-1", format="%Y-W%W-%w")
-            end_date = pd.to_datetime(periods[-1] + "-1", format="%Y-W%W-%w")
-            freq = "W"
-            date_format = "%Y-W%W"
-        else:  # month
-            # Convert format like "2023-01" to datetime objects
-            start_date = pd.to_datetime(periods[0] + "-01", format="%Y-%m-%d")
-            end_date = pd.to_datetime(periods[-1] + "-01", format="%Y-%m-%d")
-            freq = "MS"  # Month start frequency
-            date_format = "%Y-%m"
-
-        # Determine all periods that should exist in the date range
-        all_periods = (
-            pd.date_range(
-                start=start_date,
-                end=end_date,
-                freq=freq,
-            )
-            .strftime(date_format)
-            .tolist()
-        )
-
-        # Create a dataframe with all periods and the group values
-        full_periods_df = pd.DataFrame({time_col: all_periods})
-        for i, col in enumerate(group_columns):
-            full_periods_df[col] = group_values[i]
-
-        # Merge with existing data and fill missing values
-        merged_df = pd.merge(
-            full_periods_df, group_data, on=group_columns + [time_col], how="left"
-        )
-
-        # Fill dynamic metrics with zeros
-        for col in DYNAMIC_METRICS:
-            if col in merged_df.columns:
-                merged_df[col] = merged_df[col].fillna(0)
-
-        # Forward-fill accumulative metrics from previous values
-        for col in ACCUMULATIVE_METRICS:
-            if col in merged_df.columns:
-                merged_df[col] = merged_df[col].ffill()
-
-        padded_ts_dfs.append(merged_df)
-
-    return pd.concat(padded_ts_dfs, ignore_index=True)
-
 
 def generate_lead_lag_indicators(
     df: pd.DataFrame,
@@ -232,16 +139,6 @@ def load_data(aggregation: str) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFram
     # Add treatment/control indicator
     treatment_ts_df["is_treatment"] = 1
     control_ts_df["is_treatment"] = 0
-
-    # Pad missing time periods to ensure continuous time series data
-    treatment_ts_df = pad_missing_periods(
-        treatment_ts_df, group_columns=["repo_name"], time_col=aggregation
-    )
-    control_ts_df = pad_missing_periods(
-        control_ts_df, group_columns=["repo_name"], time_col=aggregation
-    )
-
-    logging.info(f"Padded missing {aggregation}s in time series data")
 
     return repos_df, treatment_ts_df, control_ts_df
 
@@ -356,7 +253,7 @@ def prepare_panel_data(aggregation: str) -> pd.DataFrame:
     repos_df, treatment_ts_df, control_ts_df = load_data(aggregation)
 
     # Process treatment repositories
-    treatment_panel_dfs = []
+    treatment_panel_dfs, treat_repos = [], set()
     processed_treatment_repos = 0
 
     for _, repo in repos_df.iterrows():
@@ -372,12 +269,15 @@ def prepare_panel_data(aggregation: str) -> pd.DataFrame:
         if repo_panel is not None:
             treatment_panel_dfs.append(repo_panel)
             processed_treatment_repos += 1
+            treat_repos.add(repo["repo_name"])
 
     # Process control repositories
     control_panel_dfs = []
     processed_control_repos = 0
 
     for repo_name in control_ts_df["repo_name"].unique():
+        if repo_name in treat_repos:
+            continue
         repo_panel = process_control_repo_panel(
             repo_name=repo_name,
             ts_df=control_ts_df,
