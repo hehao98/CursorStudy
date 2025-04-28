@@ -23,13 +23,55 @@ library(corrplot)
 ```{r load_data}
 panel_data <- fread("../data/panel_event_monthly.csv")
 
-#panel_data <- panel_data[panel_data$is_treatment == 1]
-#panel_data <- panel_data[panel_data$commits > 0]
+# panel_data <- panel_data[panel_data$is_treatment == 1] # only treatment group
+# panel_data <- panel_data[panel_data$commits > 0] # exclude inactive months
+
+# Compute churn
+#panel_data$churn <- panel_data$lines_removed / panel_data$lines_added
+
+# Alternative code quality metrics
+panel_data <- panel_data %>%
+  arrange(repo_name, time) %>%
+  group_by(repo_name) %>%
+  mutate(
+    delta_code_smells = code_smells - lag(code_smells),
+    delta_vulnerabilities = vulnerabilities - lag(vulnerabilities),
+    delta_bugs = bugs - lag(bugs)
+  ) %>%
+  ungroup()
 
 panel_data$repo_name <- as.factor(panel_data$repo_name)
 panel_data$time <- as.factor(panel_data$time)
 
 glimpse(panel_data)
+```
+
+## Define Outcome Variables
+
+```{r define_outcome_variables}
+outcome_variables_its <- c(
+    "log(commits + 1)" = "Commits",
+    "log(lines_added + 1)" = "Lines Added",
+    #"log(churn + 1)" = "Churn",
+    "log(code_smells + 1)" = "Code Smells",
+    "log(vulnerabilities + 1)" = "Vulnerabilities",
+    "log(bugs + 1)" = "Bugs",
+    "comment_lines_density" = "Comment Lines Density",
+    "duplicated_lines_density" = "Duplicated Lines",
+    "log(cognitive_complexity + 1)" = "Cognitive Complexity"
+)
+
+outcome_variables <- c(
+    "log(commits + 1)" = "Commits",
+    "log(lines_added + 1)" = "Lines Added",
+    #"log(churn + 1)" = "Churn",
+    "log(delta_code_smells + 1)" = "New Code Smells",
+    "log(delta_vulnerabilities + 1)" = "New Vulnerabilities",
+    "log(delta_bugs + 1)" = "New Bugs",
+    "comment_lines_density" = "Comment Lines Density",
+    "duplicated_lines_density" = "Duplicated Lines",
+    "log(cognitive_complexity + 1)" = "Cognitive Complexity"
+)
 ```
 
 ## Correlation Analysis of Covariates
@@ -77,17 +119,6 @@ fit_multiple_did_models <- function(outcome_vars, data) {
     return(models_list)
 }
 
-outcome_variables <- c(
-    "log(commits + 1)" = "Commits",
-    "log(lines_added + 1)" = "Lines Added",
-    "log(code_smells + 1)" = "Code Smells",
-    "log(vulnerabilities + 1)" = "Vulnerabilities",
-    "log(bugs + 1)" = "Bugs",
-    "comment_lines_density" = "Comment Lines Density",
-    "duplicated_lines_density" = "Duplicated Lines",
-    "log(cognitive_complexity + 1)" = "Cognitive Complexity"
-)
-
 did_models <- fit_multiple_did_models(outcome_variables, panel_data)
 
 modelsummary(did_models,
@@ -107,9 +138,65 @@ modelsummary(did_models,
     estimate = "{estimate}{stars}"
 )
 ```
+
+## Interrupted Time Series
+
+```{r its_setup}
+its_data <- panel_data %>%
+  group_by(repo_name) %>%
+  mutate(
+    time_numeric = as.numeric(as.factor(time)),
+    intervention = post_event,
+    time_after_intervention = ifelse(post_event == 1, time_numeric - min(time_numeric[post_event == 1]), 0)
+  ) %>%
+  ungroup()
+```
+
+```{r its_models}
+# Function to fit ITS model
+fit_its_model <- function(outcome_var, data) {
+  formula_str <- paste0(
+    outcome_var, " ~ time_numeric + intervention + time_after_intervention +
+    log(ncloc + 1) + log(age + 1) + log(contributors + 1) + log(stars + 1) + log(issues + 1)"
+  )
+
+  model <- feols(as.formula(formula_str), data = data)
+
+  return(model)
+}
+
+# Fit ITS models for each outcome
+its_models <- list()
+for (outcome in names(outcome_variables_its)) {
+  its_models[[outcome_variables_its[outcome]]] <- fit_its_model(outcome, its_data)
+}
+
+# Create coefficient map with better labels
+cm <- c(
+  "time_numeric" = "Time",
+  "intervention" = "Intervention (Post Cursor)",
+  "time_after_intervention" = "Time After Intervention",
+  "log(ncloc + 1)" = "Log Lines of Code",
+  "log(age + 1)" = "Log Age (days)",
+  "log(contributors + 1)" = "Log Contributors",
+  "log(stars + 1)" = "Log Stars",
+  "log(issues + 1)" = "Log Issues"
+)
+
+# Generate model summary table
+modelsummary(
+  its_models,
+  title = "Interrupted Time Series Models: Effects of Cursor Adoption",
+  stars = TRUE,
+  gof_map = c("nobs", "r.squared", "adj.r.squared"),
+  coef_map = cm,
+  fmt = 3
+)
+```
+
 ## Panel Event Study Models
 
-```{r panel_event_study, fig.width=12, fig.height=8}
+```{r panel_event_study, fig.width=12, fig.height=12}
 # Function to fit event study model
 fit_event_study <- function(outcome_var, data) {
     formula_str <- paste0(
@@ -127,6 +214,8 @@ fit_event_study <- function(outcome_var, data) {
 event_models <- list(
     commits = fit_event_study("log(commits + 1)", panel_data),
     lines = fit_event_study("log(lines_added + 1)", panel_data),
+    new_code_smells = fit_event_study("log(delta_code_smells + 1)", panel_data),
+    new_bugs = fit_event_study("log(delta_bugs + 1)", panel_data),
     complexity = fit_event_study("log(cognitive_complexity + 1)", panel_data),
     duplicated_lines_density = fit_event_study("duplicated_lines_density", panel_data)
 )
@@ -172,6 +261,8 @@ get_event_data <- function(model, outcome_name) {
 plot_data <- rbind(
     get_event_data(event_models$commits, "Commits"),
     get_event_data(event_models$lines, "Lines Added"),
+    get_event_data(event_models$new_code_smells, "New Code Smells"),
+    get_event_data(event_models$new_bugs, "New Bugs"),
     get_event_data(event_models$complexity, "Cognitive Complexity"),
     get_event_data(event_models$duplicated_lines_density, "Duplicated Lines Density")
 )
@@ -187,7 +278,7 @@ ggplot(plot_data, aes(x = time, y = estimate, color = outcome)) +
     ) +
     geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
     geom_vline(xintercept = 0, linetype = "dashed", color = "blue") +
-    facet_wrap(~outcome, scales = "free_y") +
+    facet_wrap(~outcome, scales = "free_y", nrow = 3, ncol = 2) +
     labs(
         title = "Event Study: Effects of Cursor Adoption",
         x = "Months Relative to Adoption",
