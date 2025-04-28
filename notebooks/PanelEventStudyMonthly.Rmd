@@ -68,6 +68,9 @@ outcome_variables <- c(
     "log(delta_code_smells + 1)" = "New Code Smells",
     "log(delta_vulnerabilities + 1)" = "New Vulnerabilities",
     "log(delta_bugs + 1)" = "New Bugs",
+    "log(delta_code_smells / lines_added + 1)" = "New Code Smells per Line Added",
+    "log(delta_vulnerabilities / lines_added + 1)" = "New Vulnerabilities per Line Added",
+    "log(delta_bugs / lines_added + 1)" = "New Bugs per Line Added",
     "comment_lines_density" = "Comment Lines Density",
     "duplicated_lines_density" = "Duplicated Lines",
     "log(cognitive_complexity + 1)" = "Cognitive Complexity"
@@ -150,6 +153,8 @@ its_data <- panel_data %>%
     time_after_intervention = ifelse(post_event == 1, time_numeric - min(time_numeric[post_event == 1]), 0)
   ) %>%
   ungroup()
+
+glimpse(its_data)
 ```
 
 ```{r its_models}
@@ -157,7 +162,8 @@ its_data <- panel_data %>%
 fit_its_model <- function(outcome_var, data) {
   formula_str <- paste0(
     outcome_var, " ~ time_numeric + intervention + time_after_intervention +
-    log(ncloc + 1) + log(age + 1) + log(contributors + 1) + log(stars + 1) + log(issues + 1)"
+    log(ncloc + 1) + log(age + 1) + log(contributors + 1) + log(stars + 1) +
+    log(issues + 1) | repo_name"
   )
 
   model <- feols(as.formula(formula_str), data = data)
