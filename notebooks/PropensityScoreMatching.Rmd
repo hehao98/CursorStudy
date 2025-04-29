@@ -68,7 +68,7 @@ for (metric in all_metrics) {
         filter(group == "control") %>%
         select(repo_name, !!sym(metric)) %>%
         mutate(
-            Group = "All Control",
+            Group = "All Candidates",
             Metric = gsub("_", " ", paste0(toupper(substr(metric, 1, 1)), substr(metric, 2, nchar(metric)))),
             Value = !!sym(metric)
         )
@@ -145,7 +145,7 @@ plot <- ggplot(ps_data, aes(x = Value, fill = Group)) +
   scale_fill_manual(values = c(
     "Treatment" = "#0072B2",      # Colorblind-friendly blue
     "Matched Control" = "#009E73", # Colorblind-friendly green
-    "All Control" = "#CC79A7"     # Colorblind-friendly pink
+    "All Candidates" = "#CC79A7"     # Colorblind-friendly pink
   )) +
   labs(
     x = "Propensity Score",
