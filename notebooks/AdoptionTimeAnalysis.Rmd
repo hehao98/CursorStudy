@@ -53,7 +53,7 @@ adoption_counts <- repos_df %>%
     arrange(adoption_yearmonth)
 
 p <- ggplot(adoption_counts, aes(x = adoption_yearmonth, y = n)) +
-    geom_bar(stat = "identity", fill = "steelblue") +
+    geom_bar(stat = "identity", fill = "#0072B2", alpha = 0.7) +
     geom_text(aes(label = n), vjust = -0.5, size = 3) +
     labs(
         #title = "Cursor Adoption Over Time",
@@ -87,7 +87,7 @@ creation_counts <- repos_df %>%
     arrange(creation_yearquarter)
 
 p2 <- ggplot(creation_counts, aes(x = creation_yearquarter, y = n)) +
-    geom_bar(stat = "identity", fill = "forestgreen") +
+    geom_bar(stat = "identity", fill = "#009E73", alpha = 0.8) +
     geom_text(aes(label = n), vjust = -0.5, size = 3) +
     labs(
         x = "Year-Quarter",

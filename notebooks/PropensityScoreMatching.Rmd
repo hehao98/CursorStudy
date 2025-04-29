@@ -141,8 +141,12 @@ ps_data <- combined_data %>%
 
 # Create density plot
 plot <- ggplot(ps_data, aes(x = Value, fill = Group)) +
-  geom_density(alpha = 0.6) +
-  scale_fill_brewer(palette = "Set1") +
+  geom_density(alpha = 0.7) +
+  scale_fill_manual(values = c(
+    "Treatment" = "#0072B2",      # Colorblind-friendly blue
+    "Matched Control" = "#009E73", # Colorblind-friendly green
+    "All Control" = "#CC79A7"     # Colorblind-friendly pink
+  )) +
   labs(
     x = "Propensity Score",
     y = "Density"
@@ -150,7 +154,9 @@ plot <- ggplot(ps_data, aes(x = Value, fill = Group)) +
   scale_y_continuous(expand = c(0, 0)) +
   scale_x_continuous(limits = c(0, 0.11), expand = c(0, 0)) +
   theme(
-    legend.position = "bottom",
+    legend.position = c(1, 1),
+    legend.justification = c(1, 1),
+    legend.background = element_rect(fill = "white", color = NA),
     plot.title = element_text(hjust = 0.5, face = "bold")
   )
 
