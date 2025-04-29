@@ -134,7 +134,7 @@ stats_table_formatted %>%
 
 ## Visualizing Propensity Score Distributions
 
-```{r propensity_distributions, fig.width=9, fig.height=3}
+```{r propensity_distributions, fig.width=5, fig.height=2.5}
 # Filter data for propensity score only
 ps_data <- combined_data %>%
   filter(Metric == "Propensity score")
@@ -148,7 +148,7 @@ plot <- ggplot(ps_data, aes(x = Value, fill = Group)) +
     y = "Density"
   ) +
   scale_y_continuous(expand = c(0, 0)) +
-  scale_x_continuous(limits = c(0, 0.1), expand = c(0, 0)) +
+  scale_x_continuous(limits = c(0, 0.11), expand = c(0, 0)) +
   theme(
     legend.position = "bottom",
     plot.title = element_text(hjust = 0.5, face = "bold")
@@ -157,5 +157,5 @@ plot <- ggplot(ps_data, aes(x = Value, fill = Group)) +
 print(plot)
 
 ggsave("../plots/propensity_score_distribution.pdf",
-  plot = plot, width = 9, height = 3)
+  plot = plot, width = 5, height = 2.5)
 ```
