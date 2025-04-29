@@ -9,6 +9,13 @@ library(ggplot2)
 library(dplyr)
 library(tidyr)
 library(kableExtra)
+
+# Set global ggplot theme - black axis lines, no grid
+# (Style copied from AdoptionTimeAnalysis.Rmd)
+theme_set(theme_minimal() +
+          theme(panel.grid = element_blank(),
+                axis.line = element_line(color = "black"),
+                axis.ticks = element_line(color = "black")))
 ```
 
 ## Loading and Exploring the Matching Data
@@ -127,24 +134,28 @@ stats_table_formatted %>%
 
 ## Visualizing Propensity Score Distributions
 
-```{r propensity_distributions, fig.width=10, fig.height=6}
+```{r propensity_distributions, fig.width=9, fig.height=3}
 # Filter data for propensity score only
 ps_data <- combined_data %>%
   filter(Metric == "Propensity score")
 
 # Create density plot
-ggplot(ps_data, aes(x = Value, fill = Group)) +
+plot <- ggplot(ps_data, aes(x = Value, fill = Group)) +
   geom_density(alpha = 0.6) +
   scale_fill_brewer(palette = "Set1") +
-  xlim(0, 0.25) +
   labs(
-    title = "Distribution of Propensity Scores",
     x = "Propensity Score",
     y = "Density"
   ) +
-  theme_minimal() +
+  scale_y_continuous(expand = c(0, 0)) +
+  scale_x_continuous(limits = c(0, 0.1), expand = c(0, 0)) +
   theme(
     legend.position = "bottom",
     plot.title = element_text(hjust = 0.5, face = "bold")
   )
+
+print(plot)
+
+ggsave("../plots/propensity_score_distribution.pdf",
+  plot = plot, width = 9, height = 3)
 ```
