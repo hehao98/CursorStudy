@@ -49,18 +49,6 @@ glimpse(panel_data)
 ## Define Outcome Variables
 
 ```{r define_outcome_variables}
-outcome_variables_its <- c(
-    "log(commits + 1)" = "Commits",
-    "log(lines_added + 1)" = "Lines Added",
-    # "log(churn + 1)" = "Churn",
-    "log(code_smells + 1)" = "Code Smells",
-    "log(vulnerabilities + 1)" = "Vulnerabilities",
-    "log(bugs + 1)" = "Bugs",
-    "comment_lines_density" = "Comment Lines Density",
-    "duplicated_lines_density" = "Duplicated Lines",
-    "log(cognitive_complexity + 1)" = "Cognitive Complexity"
-)
-
 outcome_variables <- c(
     "log(commits + 1)" = "Commits",
     "log(lines_added + 1)" = "Lines Added",
@@ -73,7 +61,10 @@ outcome_variables <- c(
     "log(delta_bugs / lines_added + 1)" = "New Bugs per Line Added",
     "comment_lines_density" = "Comment Lines Density",
     "duplicated_lines_density" = "Duplicated Lines",
-    "log(cognitive_complexity + 1)" = "Cognitive Complexity"
+    "log(cognitive_complexity + 1)" = "Cognitive Complexity",
+    "log(num_dependencies_total + 1)" = "Total Dependencies",
+    "log(num_vulnerable_dependencies + 1)" = "Vulnerable Dependencies",
+    "log(average_technical_lag + 1)" = "Average Technical Lag"
 )
 ```
 

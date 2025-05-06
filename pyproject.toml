@@ -21,6 +21,8 @@ google-cloud-bigquery-storage = "^2.30.0"
 seaborn = "^0.13.2"
 scikit-learn = "^1.6.1"
 gql = {extras = ["all"], version = "^3.5.2"}
+semver = "^3.0.4"
+node-semver = "^0.9.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.4.0"
