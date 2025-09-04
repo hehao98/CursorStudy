@@ -59,10 +59,10 @@ outcome_variables <- c(
     "log(delta_code_smells / lines_added + 1)" = "New Code Smells per Line Added",
     "log(delta_vulnerabilities / lines_added + 1)" = "New Vulnerabilities per Line Added",
     "log(delta_bugs / lines_added + 1)" = "New Bugs per Line Added",
-    "comment_lines_density" = "Comment Lines Density",
+    #"comment_lines_density" = "Comment Lines Density",
     "duplicated_lines_density" = "Duplicated Lines",
     "log(cognitive_complexity + 1)" = "Cognitive Complexity",
-    "log(num_dependencies_total + 1)" = "Total Dependencies",
+    #"log(num_dependencies_total + 1)" = "Total Dependencies",
     "log(num_vulnerable_dependencies + 1)" = "Vulnerable Dependencies",
     "log(average_technical_lag + 1)" = "Average Technical Lag"
 )
@@ -248,7 +248,9 @@ event_models <- list(
     new_code_smells = fit_event_study("log(delta_code_smells + 1)", panel_data),
     new_bugs = fit_event_study("log(delta_bugs + 1)", panel_data),
     complexity = fit_event_study("log(cognitive_complexity + 1)", panel_data),
-    duplicated_lines_density = fit_event_study("duplicated_lines_density", panel_data)
+    duplicated_lines_density = fit_event_study("duplicated_lines_density", panel_data),
+    technical_lag = fit_event_study("log(average_technical_lag + 1)", panel_data),
+    vulnerable_deps = fit_event_study("log(num_vulnerable_dependencies + 1)", panel_data)
 )
 
 # Function to extract coefficients and CIs
@@ -294,7 +296,9 @@ plot_data <- rbind(
     get_event_data(event_models$new_code_smells, "New Code Smells"),
     get_event_data(event_models$new_bugs, "New Bugs"),
     get_event_data(event_models$complexity, "Cognitive Complexity"),
-    get_event_data(event_models$duplicated_lines_density, "Duplicated Lines Density")
+    get_event_data(event_models$duplicated_lines_density, "Duplicated Lines Density"),
+    get_event_data(event_models$technical_lag, "Technical Lag"),
+    get_event_data(event_models$vulnerable_deps, "Vulnerable Dependencies")
 )
 
 # Plot all outcomes
@@ -308,7 +312,7 @@ ggplot(plot_data, aes(x = time, y = estimate, color = outcome)) +
     ) +
     geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
     geom_vline(xintercept = 0, linetype = "dashed", color = "blue") +
-    facet_wrap(~outcome, scales = "free_y", nrow = 3, ncol = 2) +
+    facet_wrap(~outcome, scales = "free_y", nrow = 4, ncol = 2) +
     labs(
         title = "Event Study: Effects of Cursor Adoption",
         x = "Months Relative to Adoption",
