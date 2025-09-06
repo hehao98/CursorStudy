@@ -22,6 +22,8 @@ from typing import Dict, List, Optional
 import git
 import pandas as pd
 
+from scripts.analyze_repos import count_cursor_commits_by_time, find_cursor_commits
+
 # Constants
 MATCHING_CSV = Path(__file__).parent.parent / "data" / "matching.csv"
 CONTROL_CLONE_DIR = Path(__file__).parent.parent.parent / "ControlRepos"
@@ -198,6 +200,10 @@ def process_repository(
     )
 
     weekly_stats = get_commit_stats(repo_path, aggregation)
+
+    cursor_commits = find_cursor_commits(repo_path)
+    cursor_commits_by_time = count_cursor_commits_by_time(cursor_commits, aggregation)
+
     if weekly_stats:
         for time_key, stats in weekly_stats.items():
             repo_ts.append(
@@ -205,6 +211,7 @@ def process_repository(
                     "repo_name": repo_name,
                     TIME_KEY: time_key,
                     "latest_commit": stats["latest_commit"],
+                    "cursor": cursor_commits_by_time.get(time_key, 0) > 0,
                     "commits": stats["commits"],
                     "lines_added": stats["lines_added"],
                     "lines_removed": stats["lines_removed"],

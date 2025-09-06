@@ -38,7 +38,7 @@ TIME_KEY = None
 
 # Fixed start date for data collection, 2024-01-01 determined by adoption time analysis
 START_DATE = "2024-01-01"
-END_DATE = "2025-03-31"
+END_DATE = "2025-08-31"
 
 # Metrics to collect from SonarQube
 METRICS_OF_INTEREST = [

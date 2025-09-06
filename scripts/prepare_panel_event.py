@@ -3,17 +3,17 @@
 Script to prepare panel event data for cursor adoption analysis.
 
 This script:
-1. Reads repositories data from repos.csv
+1. Reads repositories metadata from repos.csv
 2. Reads time series data from ts_repos_{month/week}.csv and ts_repos_control_{month/week}.csv
-3. Creates a panel dataset with lead and lag indicators for cursor adoption events
-4. Saves the results to panel_event_{weekly/monthly}.csv
+3. Detects cursor adoption events from the cursor column in time series data
+4. Creates a panel dataset with lead and lag indicators for cursor adoption events
+5. Saves the results to panel_event_{weekly/monthly}.csv
 """
 
 import argparse
 import logging
 import sys
 from pathlib import Path
-from typing import List, Optional, Tuple
 
 import pandas as pd
 
@@ -25,7 +25,7 @@ WEEK_LEAD_AND_LAG = 30
 MONTH_LEAD_AND_LAG = 6
 # Fixed start date for data collection, matching run_sonarqube.py
 START_DATE = "2024-01-01"
-END_DATE = "2025-03-31"  # Drop anything beyond this to avoid incomplete data
+END_DATE = "2025-08-31"  # Drop anything beyond this to avoid incomplete data
 
 
 def generate_lead_lag_indicators(
@@ -113,20 +113,38 @@ def process_control_repo_panel(
     return repo_ts
 
 
+def detect_cursor_adoption(
+    treatment_ts_df: pd.DataFrame, aggregation: str
+) -> pd.DataFrame:
+    """Detect cursor adoption events from time series data."""
+    # Filter for rows where cursor=True
+    cursor_adoptions = treatment_ts_df[treatment_ts_df["cursor"] == True].copy()
+
+    if cursor_adoptions.empty:
+        logging.warning("No cursor adoptions found in treatment data")
+        return pd.DataFrame(columns=["repo_name", "adoption_time"])
+
+    # Find the first adoption time for each repository
+    time_col = "week" if aggregation == "week" else "month"
+
+    # Sort by time to ensure we get the earliest adoption
+    cursor_adoptions = cursor_adoptions.sort_values(["repo_name", time_col])
+
+    # Get first adoption for each repo
+    first_adoptions = (
+        cursor_adoptions.groupby("repo_name")[time_col].first().reset_index()
+    )
+    first_adoptions.rename(columns={time_col: "adoption_time"}, inplace=True)
+
+    logging.info(f"Detected {len(first_adoptions)} repositories with cursor adoption")
+
+    return first_adoptions
+
+
 def load_data(aggregation: str) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """Load repository and time series data for both treatment and control groups."""
     treatment_ts_file = DATA_DIR / f"ts_repos_{aggregation}ly.csv"
     control_ts_file = DATA_DIR / f"ts_repos_control_{aggregation}ly.csv"
-
-    # Read repository data
-    logging.info(f"Reading repository data from {REPOS_CSV}")
-    repos_df = pd.read_csv(REPOS_CSV).dropna(subset=["repo_cursor_adoption"])
-
-    # Convert adoption dates to the appropriate format
-    date_format = "%Y-W%W" if aggregation == "week" else "%Y-%m"
-    repos_df["adoption_time"] = repos_df["repo_cursor_adoption"].apply(
-        lambda x: pd.to_datetime(x).strftime(date_format)
-    )
 
     # Read treatment time series data
     logging.info(f"Reading treatment time series data from {treatment_ts_file}")
@@ -136,11 +154,14 @@ def load_data(aggregation: str) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFram
     logging.info(f"Reading control time series data from {control_ts_file}")
     control_ts_df = pd.read_csv(control_ts_file)
 
+    # Detect cursor adoption events from treatment time series
+    adoption_df = detect_cursor_adoption(treatment_ts_df, aggregation)
+
     # Add treatment/control indicator
     treatment_ts_df["is_treatment"] = 1
     control_ts_df["is_treatment"] = 0
 
-    return repos_df, treatment_ts_df, control_ts_df
+    return adoption_df, treatment_ts_df, control_ts_df
 
 
 def process_repo_panel(
@@ -250,13 +271,13 @@ def prepare_panel_data(aggregation: str) -> pd.DataFrame:
         lag_periods = range(0, MONTH_LEAD_AND_LAG + 1)
 
     # Load data for both treatment and control groups
-    repos_df, treatment_ts_df, control_ts_df = load_data(aggregation)
+    adoption_df, treatment_ts_df, control_ts_df = load_data(aggregation)
 
     # Process treatment repositories
     treatment_panel_dfs, treat_repos = [], set()
     processed_treatment_repos = 0
 
-    for _, repo in repos_df.iterrows():
+    for _, repo in adoption_df.iterrows():
         repo_panel = process_repo_panel(
             repo_name=repo["repo_name"],
             adoption_time=repo["adoption_time"],

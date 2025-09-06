@@ -1,6 +1,9 @@
 # sonar files
 .scannerwork/
 
+# VSCode files
+.vscode/
+
 # temp data files
 temp/
 

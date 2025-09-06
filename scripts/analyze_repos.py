@@ -204,68 +204,16 @@ def get_commit_stats(
         return None, None
 
 
-def find_cursor_file_introduction(
-    repo_path: Path, cursor_files: List[str]
-) -> Optional[datetime]:
+def find_cursor_commits(repo_path: Path) -> List[Dict]:
     """
-    Find when cursor files were first introduced in a repository.
+    Scan all commits in a repository to check for .cursorrules files or cursor/ directories.
 
     Args:
         repo_path (Path): Path to the repository
-        cursor_files (list): List of cursor file paths to look for
 
     Returns:
-        datetime or None: Timestamp of first cursor file introduction or None if not found
-    """
-    try:
-        repo = git.Repo(str(repo_path))
-
-        # Checkout HEAD before analyzing
-        try:
-            logging.info("Checking out HEAD for repo %s", repo_path.name)
-            repo.git.checkout("HEAD")
-        except git.GitCommandError as e:
-            logging.error("Failed to checkout HEAD for %s: %s", repo_path.name, e)
-            # Continue anyway to try to collect what we can
-
-        first_introduction = None
-
-        for file_path in cursor_files:
-            # Skip if file doesn't exist in the repo
-            if not (repo_path / file_path).exists():
-                continue
-
-            try:
-                # Use git log to find the earliest commit for this file
-                commits = list(repo.iter_commits(paths=file_path))
-                if commits:
-                    # Last commit in the list is the oldest
-                    oldest_commit = commits[-1]
-                    commit_time = datetime.fromtimestamp(oldest_commit.committed_date)
-
-                    # Update the first introduction time if this is earlier
-                    if first_introduction is None or commit_time < first_introduction:
-                        first_introduction = commit_time
-            except Exception as e:
-                logging.debug("Could not find introduction of %s: %s", file_path, e)
-                continue
-
-        return first_introduction
-    except Exception as e:
-        logging.error("Failed to analyze cursor files in %s: %s", repo_path, e)
-        return None
-
-
-def find_cursor_file_commits(repo_path: Path, cursor_files: List[str]) -> List[Dict]:
-    """
-    Find all commits that modified cursor files in a repository.
-
-    Args:
-        repo_path (Path): Path to the repository
-        cursor_files (list): List of cursor file paths to check
-
-    Returns:
-        List of dictionaries containing commit information
+        List of dictionaries containing commit information for commits that contain
+            .cursorrules files or cursor/ directories
     """
     commits_data = []
 
@@ -282,36 +230,47 @@ def find_cursor_file_commits(repo_path: Path, cursor_files: List[str]) -> List[D
 
         repo_name = repo_path.name.replace("_", "/")
 
-        for file_path in cursor_files:
-            # Skip if file doesn't exist in the repo
-            if not (repo_path / file_path).exists():
-                continue
+        for commit in repo.iter_commits():
+            commit_time = datetime.fromtimestamp(commit.committed_date)
+            author_date = datetime.fromtimestamp(commit.authored_date)
+
+            # Check if this commit contains .cursorrules or cursor/ directory
+            has_cursor_files = False
 
             try:
-                # Get all commits that modified this file
-                for commit in repo.iter_commits(paths=file_path):
-                    commit_time = datetime.fromtimestamp(commit.committed_date)
-                    author_date = datetime.fromtimestamp(commit.authored_date)
+                # Get the tree for this commit
+                tree = commit.tree
 
-                    commits_data.append(
-                        {
-                            "repo_name": repo_name,
-                            "commit_hash": commit.hexsha,
-                            "cursor_file": file_path,
-                            "author": f"{commit.author.name} <{commit.author.email}>",
-                            "authored_at": author_date.isoformat(),
-                            "committer": f"{commit.committer.name} <{commit.committer.email}>",
-                            "committed_at": commit_time.isoformat(),
-                            "message": commit.message,
-                        }
-                    )
+                # Check for Cursor related files
+                if (
+                    ".cursorrules" in tree
+                    or ".cursor" in tree
+                    or ".cursorignore" in tree
+                ):
+                    has_cursor_files = True
+
             except Exception as e:
-                logging.error(f"Error processing commits for {file_path}: {e}")
+                logging.debug(
+                    "Could not check tree for commit %s: %s", commit.hexsha, e
+                )
                 continue
 
-        return commits_data
+            if has_cursor_files:
+                commits_data.append(
+                    {
+                        "repo_name": repo_name,
+                        "commit_hash": commit.hexsha,
+                        "author": f"{commit.author.name} <{commit.author.email}>",
+                        "authored_at": author_date.isoformat(),
+                        "committer": f"{commit.committer.name} <{commit.committer.email}>",
+                        "committed_at": commit_time.isoformat(),
+                        "message": commit.message.split("\n")[0],
+                    }
+                )
+
+        return sorted(commits_data, key=lambda x: x["authored_at"])
     except Exception as e:
-        logging.error(f"Failed to find cursor file commits in {repo_path}: {e}")
+        logging.error("Failed to find cursor commits in %s: %s", repo_path, e)
         return []
 
 
@@ -341,10 +300,9 @@ def count_cursor_commits_by_time(
 def process_repository(
     idx: int,
     repo: Dict,
-    repo_cursor_files: Dict[str, List[str]],
     total_repos: int,
     aggregation: str,
-) -> Tuple[List[Dict], Dict[str, str], List[Dict], List[Dict]]:
+) -> Tuple[List[Dict], List[Dict]]:
     """
     Process a single repository in a worker process.
 
@@ -356,62 +314,45 @@ def process_repository(
         aggregation: Either 'week' or 'month'
 
     Returns:
-        Tuple of (repo_ts, adoption_date, contributor_ts, cursor_commits) where:
+        Tuple of (repo_ts, contributor_ts) where:
             repo_ts: List of time period statistics dictionaries
-            adoption_date: Dictionary mapping repo_name to cursor adoption date
             contributor_ts: List of contributor statistics dictionaries
-            cursor_commits: List of commits modifying cursor files
     """
     repo_name = repo["repo_name"]
     repo_path = CLONE_DIR / repo_name.replace("/", "_")
     repo_ts = []
     contributor_ts = []
-    cursor_commits = []
-    adoption_date = {}
 
     if not repo_path.exists():
-        return repo_ts, adoption_date, contributor_ts, cursor_commits
+        return repo_ts, contributor_ts
 
     logging.info("Analyzing repository: %s (%d/%d)", repo_name, idx + 1, total_repos)
 
-    if repo_name in repo_cursor_files:
-        cursor_files = repo_cursor_files[repo_name]
-        introduction_date = find_cursor_file_introduction(repo_path, cursor_files)
-        if introduction_date:
-            adoption_date[repo_name] = introduction_date.isoformat()
-            logging.info("Found cursor adoption date: %s", introduction_date)
-
-        cursor_commits = find_cursor_file_commits(repo_path, cursor_files)
-        if cursor_commits:
-            logging.info("Found %d commits modifying cursor files", len(cursor_commits))
-
     weekly_stats, contributor_stats = get_commit_stats(repo_path, aggregation)
-
-    # Count cursor commits by time period
+    cursor_commits = find_cursor_commits(repo_path)
     cursor_commits_by_time = count_cursor_commits_by_time(cursor_commits, aggregation)
 
     if weekly_stats:
         for time_key, stats in weekly_stats.items():
-            # Add cursor commits count to the stats
-            stats["cursor_commits"] = cursor_commits_by_time.get(time_key, 0)
+            has_cursor_usage = cursor_commits_by_time.get(time_key, 0) > 0
 
             repo_ts.append(
                 {
                     "repo_name": repo_name,
                     TIME_KEY: time_key,
                     "latest_commit": stats["latest_commit"],
+                    "cursor": has_cursor_usage,
                     "commits": stats["commits"],
                     "lines_added": stats["lines_added"],
                     "lines_removed": stats["lines_removed"],
                     "contributors": stats["contributors"],
-                    "cursor_commits": stats["cursor_commits"],
                 }
             )
 
     if contributor_stats:
         contributor_ts.extend(contributor_stats)
 
-    return repo_ts, adoption_date, contributor_ts, cursor_commits
+    return repo_ts, contributor_ts
 
 
 def main() -> None:
@@ -443,31 +384,18 @@ def main() -> None:
 
     try:
         repos_df = pd.read_csv(REPOS_CSV)
-        cursor_files_df = pd.read_csv(CURSOR_FILES_CSV)
-        logging.info(
-            "Read %d repositories and %d cursor files",
-            len(repos_df),
-            len(cursor_files_df),
-        )
     except Exception as e:
         logging.error("Failed to read CSV files: %s", e)
         return
 
-    repo_cursor_files = defaultdict(list)
-    for _, row in cursor_files_df.iterrows():
-        repo_cursor_files[row["repo_name"]].append(row["file_path"])
-
     total_repos = len(repos_df)
     args_list = [
-        (idx, repo, repo_cursor_files, total_repos, args.aggregation)
-        for idx, repo in repos_df.iterrows()
+        (idx, repo, total_repos, args.aggregation) for idx, repo in repos_df.iterrows()
     ]
     random.shuffle(args_list)
 
     repo_ts = []
     contributor_ts = []
-    cursor_commits = []
-    adoption_dates = {}
 
     logging.info("Starting multiprocessing pool with %d workers", NUM_PROCESSES)
     with multiprocessing.Pool(processes=NUM_PROCESSES) as pool:
@@ -480,14 +408,10 @@ def main() -> None:
             try:
                 (
                     repo_time_series,
-                    repo_adoption_date,
                     repo_contributor_ts,
-                    repo_cursor_commits,
                 ) = async_result.get(timeout=REPO_TIMEOUT_SECONDS)
                 repo_ts.extend(repo_time_series)
                 contributor_ts.extend(repo_contributor_ts)
-                cursor_commits.extend(repo_cursor_commits)
-                adoption_dates.update(repo_adoption_date)
             except multiprocessing.TimeoutError:
                 logging.error(
                     "Repository %s processing timed out after %d seconds",
@@ -513,25 +437,6 @@ def main() -> None:
         contributor_df = pd.DataFrame(contributor_ts)
         contributor_df.to_csv(contributor_output, index=False)
         logging.info("Saved contributor time series data to %s", contributor_output)
-
-    # Avoid updating them because they are buggy for now
-    """
-    if cursor_commits:
-        cursor_commits_df = pd.DataFrame(cursor_commits)
-        cursor_commits_df.to_csv(CURSOR_COMMITS_CSV, index=False)
-        logging.info(
-            "Saved %d cursor commits to %s", len(cursor_commits), CURSOR_COMMITS_CSV
-        )
-
-    if adoption_dates:
-        repos_df["repo_cursor_adoption"] = repos_df["repo_name"].map(adoption_dates)
-        repos_df.to_csv(REPOS_CSV, index=False)
-        logging.info(
-            "Updated %s with cursor adoption dates for %d repositories",
-            REPOS_CSV,
-            len(adoption_dates),
-        )
-    """
 
 
 if __name__ == "__main__":

@@ -9,6 +9,9 @@ from typing import Dict, List, Tuple
 import pandas as pd
 from google.cloud import bigquery
 
+# Minimum number of stars for a repository to be considered
+MIN_STARS = 10
+
 REPOS_CSV = Path(__file__).parent.parent / "data" / "repos.csv"
 MATCHING_CSV = Path(__file__).parent.parent / "data" / "matching.csv"
 REPO_EVENTS_OUTPUT_FILE = Path(__file__).parent.parent / "data" / "repo_events.csv"
@@ -150,7 +153,7 @@ def pad_missing_periods(
 def load_repos_with_cursor_adoption() -> List[str]:
     """Load repos with Cursor adoption dates from CSV."""
     df = pd.read_csv(REPOS_CSV)
-    cursor_repos = df[df["repo_cursor_adoption"].notna()]
+    cursor_repos = df[df["repo_stars"] >= MIN_STARS]
     repos = cursor_repos["repo_name"].tolist()
     logging.info(f"Loaded {len(repos)} repos with Cursor adoption dates")
     return repos
