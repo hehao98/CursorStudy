@@ -16,6 +16,7 @@ library(ggplot2)
 library(data.table)
 library(modelsummary)
 library(corrplot)
+library(bacondecomp)
 ```
 
 ## Loading and Preparing the Data
@@ -52,19 +53,20 @@ glimpse(panel_data)
 outcome_variables <- c(
     "log(commits + 1)" = "Commits",
     "log(lines_added + 1)" = "Lines Added",
-    # "log(churn + 1)" = "Churn",
-    "log(delta_code_smells + 1)" = "New Code Smells",
-    "log(delta_vulnerabilities + 1)" = "New Vulnerabilities",
-    "log(delta_bugs + 1)" = "New Bugs",
-    "log(delta_code_smells / lines_added + 1)" = "New Code Smells per Line Added",
-    "log(delta_vulnerabilities / lines_added + 1)" = "New Vulnerabilities per Line Added",
-    "log(delta_bugs / lines_added + 1)" = "New Bugs per Line Added",
-    #"comment_lines_density" = "Comment Lines Density",
-    "duplicated_lines_density" = "Duplicated Lines",
-    "log(cognitive_complexity + 1)" = "Cognitive Complexity",
+    #"log(bugs + 1)" = "Bugs",
+    #"log(code_smells + 1)" = "Code Smells",
+    #"log(delta_code_smells + 1)" = "New Code Smells",
+    #"log(delta_vulnerabilities + 1)" = "New Vulnerabilities",
+    #"log(delta_bugs + 1)" = "New Bugs",
+    #"log(delta_code_smells / lines_added + 1)" = "New Code Smells per Line Added",
+    #"log(delta_vulnerabilities / lines_added + 1)" = "New Vulnerabilities per Line Added",
+    #"log(delta_bugs / lines_added + 1)" = "New Bugs per Line Added",
+    "comment_lines_density" = "Comment Lines Density",
+    #"duplicated_lines_density" = "Duplicated Lines",
+    "log(cognitive_complexity + 1)" = "Cognitive Complexity"
     #"log(num_dependencies_total + 1)" = "Total Dependencies",
-    "log(num_vulnerable_dependencies + 1)" = "Vulnerable Dependencies",
-    "log(average_technical_lag + 1)" = "Average Technical Lag"
+    #"log(num_vulnerable_dependencies + 1)" = "Vulnerable Dependencies",
+    #"log(average_technical_lag + 1)" = "Average Technical Lag"
 )
 ```
 
@@ -177,9 +179,9 @@ high_cursor_commits_data <- heterogeneity_data %>% filter(high_cursor_commits)
 heterogeneity_outcomes <- c(
     "log(commits + 1)" = "Commits",
     "log(lines_added + 1)" = "Lines Added",
-    "log(delta_code_smells + 1)" = "New Code Smells",
-    "log(delta_bugs + 1)" = "New Bugs",
-    "duplicated_lines_density" = "Duplicated Lines Density",
+    #"log(delta_code_smells + 1)" = "New Code Smells",
+    #"log(delta_bugs + 1)" = "New Bugs",
+    "comment_lines_density" = "Comment Lines Density",
     "log(cognitive_complexity + 1)" = "Cognitive Complexity"
 )
 
@@ -227,7 +229,7 @@ knitr::kable(heterogeneity_results,
 
 ## Panel Event Study Models
 
-```{r panel_event_study, fig.width=12, fig.height=12}
+```{r panel_event_study, fig.width=12, fig.height=9}
 # Function to fit event study model
 fit_event_study <- function(outcome_var, data) {
     formula_str <- paste0(
@@ -245,12 +247,15 @@ fit_event_study <- function(outcome_var, data) {
 event_models <- list(
     commits = fit_event_study("log(commits + 1)", panel_data),
     lines = fit_event_study("log(lines_added + 1)", panel_data),
-    new_code_smells = fit_event_study("log(delta_code_smells + 1)", panel_data),
-    new_bugs = fit_event_study("log(delta_bugs + 1)", panel_data),
+    #new_code_smells = fit_event_study("log(delta_code_smells + 1)", panel_data),
+    #new_bugs = fit_event_study("log(delta_bugs + 1)", panel_data),
     complexity = fit_event_study("log(cognitive_complexity + 1)", panel_data),
-    duplicated_lines_density = fit_event_study("duplicated_lines_density", panel_data),
-    technical_lag = fit_event_study("log(average_technical_lag + 1)", panel_data),
-    vulnerable_deps = fit_event_study("log(num_vulnerable_dependencies + 1)", panel_data)
+    #duplicated_lines_density = fit_event_study("duplicated_lines_density", panel_data)
+    comment_lines_density = fit_event_study("comment_lines_density", panel_data)
+    #bugs = fit_event_study("log(bugs + 1)", panel_data),
+    #code_smells = fit_event_study("log(code_smells + 1)", panel_data)
+    #technical_lag = fit_event_study("log(average_technical_lag + 1)", panel_data),
+    #vulnerable_deps = fit_event_study("log(num_vulnerable_dependencies + 1)", panel_data)
 )
 
 # Function to extract coefficients and CIs
@@ -293,12 +298,15 @@ get_event_data <- function(model, outcome_name) {
 plot_data <- rbind(
     get_event_data(event_models$commits, "Commits"),
     get_event_data(event_models$lines, "Lines Added"),
-    get_event_data(event_models$new_code_smells, "New Code Smells"),
-    get_event_data(event_models$new_bugs, "New Bugs"),
+    #get_event_data(event_models$new_code_smells, "New Code Smells"),
+    #get_event_data(event_models$new_bugs, "New Bugs"),
     get_event_data(event_models$complexity, "Cognitive Complexity"),
-    get_event_data(event_models$duplicated_lines_density, "Duplicated Lines Density"),
-    get_event_data(event_models$technical_lag, "Technical Lag"),
-    get_event_data(event_models$vulnerable_deps, "Vulnerable Dependencies")
+    get_event_data(event_models$comment_lines_density, "Comment Lines Density")
+    #get_event_data(event_models$bugs, "bugs"),
+    #get_event_data(event_models$code_smells, "Code Smells")
+    #get_event_data(event_models$duplicated_lines_density, "Duplicated Lines Density")
+    #get_event_data(event_models$technical_lag, "Technical Lag"),
+    #get_event_data(event_models$vulnerable_deps, "Vulnerable Dependencies")
 )
 
 # Plot all outcomes

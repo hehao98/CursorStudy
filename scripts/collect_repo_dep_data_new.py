@@ -39,9 +39,9 @@ CONTROL_REPOS_DIR = Path(__file__).parent.parent.parent / "ControlRepos"
 
 DEPENDENCY_COLS = [
     "num_dependencies_total",
-    "num_normal_dependencies",
-    "num_dev_dependencies",
-    "num_peer_dependencies",
+    #    "num_normal_dependencies",
+    #    "num_dev_dependencies",
+    #    "num_peer_dependencies",
     "num_vulnerable_dependencies",
     "average_technical_lag",
 ]

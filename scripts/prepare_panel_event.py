@@ -77,24 +77,34 @@ def generate_lead_lag_indicators(
         result_df["time_to_event"] >= lag_periods[-1]
     ).astype(int)
 
+    # Handle cursor abandonment: set post_event=0 and all indicators=0 when cursor=False
+    cursor_abandonment_mask = (result_df["cursor"] == False) | (
+        result_df["cursor"].isna()
+    )
+
+    # Set post_event to 0 for abandonment periods
+    result_df.loc[cursor_abandonment_mask, "post_event"] = 0
+
+    # Set all lag indicators to 0 for abandonment periods
+    for lag in lag_periods:
+        result_df.loc[cursor_abandonment_mask, f"lag_{lag}"] = 0
+
     return result_df.drop(columns=["time_dt"])
 
 
-def process_control_repo_panel(
+def process_non_adopter_repo_panel(
     repo_name: str,
     ts_df: pd.DataFrame,
     aggregation: str,
     lead_periods: range,
     lag_periods: range,
 ) -> pd.DataFrame:
-    """Generate panel data for a control repository without event indicators."""
+    """Generate panel data for repositories that never adopted cursor."""
     # Get time series data for this repository
     repo_ts = ts_df[ts_df["repo_name"] == repo_name].copy()
 
     if repo_ts.empty:
-        logging.warning(
-            f"No time series data found for control repository: {repo_name}"
-        )
+        logging.warning(f"No time series data found for repository: {repo_name}")
         return None
 
     # Add required columns with appropriate null/zero values
@@ -113,15 +123,15 @@ def process_control_repo_panel(
     return repo_ts
 
 
-def detect_cursor_adoption(
-    treatment_ts_df: pd.DataFrame, aggregation: str
+def detect_cursor_adoption_unified(
+    combined_ts_df: pd.DataFrame, aggregation: str
 ) -> pd.DataFrame:
-    """Detect cursor adoption events from time series data."""
+    """Detect cursor adoption events from unified time series data."""
     # Filter for rows where cursor=True
-    cursor_adoptions = treatment_ts_df[treatment_ts_df["cursor"] == True].copy()
+    cursor_adoptions = combined_ts_df[combined_ts_df["cursor"] == True].copy()
 
     if cursor_adoptions.empty:
-        logging.warning("No cursor adoptions found in treatment data")
+        logging.warning("No cursor adoptions found in data")
         return pd.DataFrame(columns=["repo_name", "adoption_time"])
 
     # Find the first adoption time for each repository
@@ -141,27 +151,41 @@ def detect_cursor_adoption(
     return first_adoptions
 
 
-def load_data(aggregation: str) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    """Load repository and time series data for both treatment and control groups."""
+def load_data_unified(aggregation: str) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Load and combine time series data with dynamic treatment assignment."""
     treatment_ts_file = DATA_DIR / f"ts_repos_{aggregation}ly.csv"
     control_ts_file = DATA_DIR / f"ts_repos_control_{aggregation}ly.csv"
 
-    # Read treatment time series data
+    # Read both time series datasets
     logging.info(f"Reading treatment time series data from {treatment_ts_file}")
     treatment_ts_df = pd.read_csv(treatment_ts_file)
 
-    # Read control time series data
     logging.info(f"Reading control time series data from {control_ts_file}")
     control_ts_df = pd.read_csv(control_ts_file)
 
-    # Detect cursor adoption events from treatment time series
-    adoption_df = detect_cursor_adoption(treatment_ts_df, aggregation)
+    # Add dataset source indicators for tracking
+    treatment_ts_df["dataset_source"] = "treatment"
+    control_ts_df["dataset_source"] = "control"
 
-    # Add treatment/control indicator
-    treatment_ts_df["is_treatment"] = 1
-    control_ts_df["is_treatment"] = 0
+    # Combine datasets
+    combined_ts_df = pd.concat([treatment_ts_df, control_ts_df], ignore_index=True)
 
-    return adoption_df, treatment_ts_df, control_ts_df
+    # Dynamic treatment assignment: is_treatment = cursor usage
+    # This handles both adoption and discontinuation automatically
+    # Each repo-period is treated based on actual cursor usage that period
+    # Fill na values based on the last non-na value
+    combined_ts_df["cursor"] = combined_ts_df["cursor"].fillna(method="ffill")
+    combined_ts_df["is_treatment"] = combined_ts_df["cursor"].astype(int)
+
+    # Detect cursor adoption events from unified data
+    adoption_df = detect_cursor_adoption_unified(combined_ts_df, aggregation)
+
+    logging.info(
+        f"Combined {len(treatment_ts_df)} treatment and {len(control_ts_df)} "
+        f"control observations into {len(combined_ts_df)} total observations"
+    )
+
+    return adoption_df, combined_ts_df
 
 
 def process_repo_panel(
@@ -270,61 +294,63 @@ def prepare_panel_data(aggregation: str) -> pd.DataFrame:
         lead_periods = range(1, MONTH_LEAD_AND_LAG + 1)
         lag_periods = range(0, MONTH_LEAD_AND_LAG + 1)
 
-    # Load data for both treatment and control groups
-    adoption_df, treatment_ts_df, control_ts_df = load_data(aggregation)
+    # Load unified data with dynamic treatment assignment
+    adoption_df, combined_ts_df = load_data_unified(aggregation)
 
-    # Process treatment repositories
-    treatment_panel_dfs, treat_repos = [], set()
-    processed_treatment_repos = 0
+    # Process repositories with cursor adoption events
+    adopter_panel_dfs = []
+    processed_adopter_repos = 0
+    adopter_repos = set()
 
     for _, repo in adoption_df.iterrows():
         repo_panel = process_repo_panel(
             repo_name=repo["repo_name"],
             adoption_time=repo["adoption_time"],
-            ts_df=treatment_ts_df,
+            ts_df=combined_ts_df,
             aggregation=aggregation,
             lead_periods=lead_periods,
             lag_periods=lag_periods,
         )
 
         if repo_panel is not None:
-            treatment_panel_dfs.append(repo_panel)
-            processed_treatment_repos += 1
-            treat_repos.add(repo["repo_name"])
+            adopter_panel_dfs.append(repo_panel)
+            processed_adopter_repos += 1
+            adopter_repos.add(repo["repo_name"])
 
-    # Process control repositories
-    control_panel_dfs = []
-    processed_control_repos = 0
+    # Process repositories that never adopted cursor
+    non_adopter_panel_dfs = []
+    processed_non_adopter_repos = 0
 
-    for repo_name in control_ts_df["repo_name"].unique():
-        if repo_name in treat_repos:
+    for repo_name in combined_ts_df["repo_name"].unique():
+        if repo_name in adopter_repos:
             continue
-        repo_panel = process_control_repo_panel(
+        repo_panel = process_non_adopter_repo_panel(
             repo_name=repo_name,
-            ts_df=control_ts_df,
+            ts_df=combined_ts_df,
             aggregation=aggregation,
             lead_periods=lead_periods,
             lag_periods=lag_periods,
         )
 
         if repo_panel is not None:
-            control_panel_dfs.append(repo_panel)
-            processed_control_repos += 1
+            non_adopter_panel_dfs.append(repo_panel)
+            processed_non_adopter_repos += 1
 
-    if not treatment_panel_dfs and not control_panel_dfs:
+    if not adopter_panel_dfs and not non_adopter_panel_dfs:
         logging.error("No repositories with sufficient data for panel analysis")
         return pd.DataFrame()
 
     # Combine all repository panel data
     panel_dfs = []
-    if treatment_panel_dfs:
-        panel_dfs.extend(treatment_panel_dfs)
-    if control_panel_dfs:
-        panel_dfs.extend(control_panel_dfs)
+    if adopter_panel_dfs:
+        panel_dfs.extend(adopter_panel_dfs)
+    if non_adopter_panel_dfs:
+        panel_dfs.extend(non_adopter_panel_dfs)
 
     panel_df = pd.concat(panel_dfs, ignore_index=True)
     logging.info(
-        f"Processed {processed_treatment_repos} treatment repositories and {processed_control_repos} control repositories for panel analysis"
+        f"Processed {processed_adopter_repos} cursor adopter repositories and "
+        f"{processed_non_adopter_repos} non-adopter repositories for panel analysis"
     )
 
     # Filter data and add repository age

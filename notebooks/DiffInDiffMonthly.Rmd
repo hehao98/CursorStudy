@@ -22,13 +22,16 @@ library(modelsummary)
 ```{r load_data}
 panel_data <- fread("../data/panel_event_monthly.csv")
 
+panel_data <- panel_data[panel_data$commits > 0]
+
 # Convert variables to DiD required format
 panel_data$repo_name <- as.numeric(factor(panel_data$repo_name))
 panel_data$time <- as.numeric(gsub("-", "", panel_data$time))
 panel_data$event[!is.na(panel_data$event)] <- as.numeric(
     gsub("-", "", panel_data$event[!is.na(panel_data$event)]))
 panel_data$event[is.na(panel_data$event)] <- 0
-panel_data <- panel_data[panel_data$event < 202401 | panel_data$event > 202407]
+panel_data <- panel_data[panel_data$event < 202401 # never treated
+        | (panel_data$event > 202407 & panel_data$event <= 202503)]
 panel_data$event <- as.integer(panel_data$event)
 
 # Log transform skewed variables
@@ -56,7 +59,7 @@ run_did_analysis <- function(outcome_var, data) {
         gname = "event",
         idname = "repo_name",
         tname = "time",
-        xformla = ~ ncloc + age + contributors + stars + issues,
+        xformla = ~ age + ncloc + contributors + stars + issues,
         data = data,
         panel = TRUE,
         allow_unbalanced_panel = TRUE,
@@ -70,11 +73,11 @@ run_did_analysis <- function(outcome_var, data) {
 outcome_vars <- c(
     "commits",
     "lines_added",
-    "code_smells",
-    "vulnerabilities",
-    "bugs",
+    #"code_smells",
+    #"vulnerabilities",
+    #"bugs",
     "comment_lines_density",
-    "duplicated_lines_density",
+    #"duplicated_lines_density",
     "cognitive_complexity"
 )
 
@@ -83,11 +86,7 @@ did_results <- list()
 for (var in outcome_vars) {
     did_results[[var]] <- run_did_analysis(var, panel_data)
 }
-```
 
-## Aggregate Treatment Effects
-
-```{r aggregate_effects}
 # Function to get aggregated treatment effects
 get_aggregate_effects <- function(did_result) {
     agg <- aggte(did_result, type = "simple")
@@ -156,9 +155,9 @@ plot_event_study <- function(did_result, title) {
 # Select key outcomes for visualization
 key_outcomes <- c(
     "commits", "lines_added",
-    "cognitive_complexity", "duplicated_lines_density"
+    "cognitive_complexity", "comment_lines_density"
 )
-key_titles <- c("Commits", "Lines Added", "Cognitive Complexity", "Duplicated Lines Density")
+key_titles <- c("Commits", "Lines Added", "Cognitive Complexity", "Comment Lines Density")
 
 # Create plot list (only include valid plots)
 plot_list <- list()
