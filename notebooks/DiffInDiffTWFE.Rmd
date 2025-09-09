@@ -63,8 +63,8 @@ outcome_variables <- c(
     #"log(delta_code_smells / lines_added + 1)" = "New Code Smells per Line Added",
     #"log(delta_vulnerabilities / lines_added + 1)" = "New Vulnerabilities per Line Added",
     #"log(delta_bugs / lines_added + 1)" = "New Bugs per Line Added",
-    "comment_lines_density" = "Comment Lines Density",
-    "duplicated_lines_density" = "Duplicated Lines",
+    "log(comment_lines_density + 1)" = "Comment Lines Density",
+    "log(duplicated_lines_density + 1)" = "Duplicated Lines",
     "log(cognitive_complexity + 1)" = "Cognitive Complexity"
     #"log(technical_debt + 1)" = "Technical Debt"
     #"log(num_dependencies_total + 1)" = "Total Dependencies",
