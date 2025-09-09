@@ -382,19 +382,3 @@ for (i in seq_along(outcome_vars)) {
 # Arrange plots in a grid
 do.call(gridExtra::grid.arrange, c(individual_plots, ncol = 2))
 ```
-
-## Summary Table
-
-```{r summary_table}
-# Create summary table
-summary_table <- static_effects %>%
-    select(outcome, method, estimate, se) %>%
-    pivot_wider(names_from = method, values_from = c(estimate, se)) %>%
-    mutate(
-        outcome = tools::toTitleCase(gsub("_", " ", outcome))
-    )
-
-knitr::kable(summary_table,
-             digits = 3,
-             caption = "Treatment Effects Summary by Method")
-```
