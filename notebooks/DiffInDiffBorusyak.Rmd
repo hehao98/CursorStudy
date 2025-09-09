@@ -1,0 +1,243 @@
+---
+title: "The Impact of Cursor Adoption on Velocity and Quality - Borusyak et al. (2021) DiD Approach"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+## Loading Required Packages
+
+```{r load_packages}
+library(didimputation)
+library(tidyverse)
+library(ggplot2)
+library(data.table)
+library(modelsummary)
+library(fixest)
+library(gridExtra)
+```
+
+## Loading and Preparing the Data
+
+```{r load_data}
+panel_data <- fread("../data/panel_event_monthly.csv")
+
+panel_data <- panel_data[panel_data$commits > 0]
+
+# Convert variables to DiD required format
+panel_data$repo_name <- as.numeric(factor(panel_data$repo_name))
+panel_data$time <- as.numeric(gsub("-", "", panel_data$time))
+panel_data$event[!is.na(panel_data$event)] <- as.numeric(
+    gsub("-", "", panel_data$event[!is.na(panel_data$event)]))
+panel_data$event[is.na(panel_data$event)] <- 0
+panel_data <- panel_data[panel_data$event < 202401 # never treated
+        | (panel_data$event > 202407 & panel_data$event <= 202503)]
+panel_data$event <- as.integer(panel_data$event)
+
+# Log transform skewed variables
+panel_data$commits <- log(panel_data$commits + 1)
+panel_data$lines_added <- log(panel_data$lines_added + 1)
+panel_data$code_smells <- log(panel_data$code_smells + 1)
+panel_data$vulnerabilities <- log(panel_data$vulnerabilities + 1)
+panel_data$bugs <- log(panel_data$bugs + 1)
+panel_data$cognitive_complexity <- log(panel_data$cognitive_complexity + 1)
+panel_data$age <- log(panel_data$age + 1)
+panel_data$contributors <- log(panel_data$contributors + 1)
+panel_data$stars <- log(panel_data$stars + 1)
+panel_data$issues <- log(panel_data$issues + 1)
+panel_data$issue_comments <- log(panel_data$issue_comments + 1)
+
+# Create treatment indicator and time since treatment variables
+panel_data$treated <- ifelse(panel_data$event > 0, 1, 0)
+panel_data$time_since_treatment <- ifelse(panel_data$treated == 1,
+                                         panel_data$time - panel_data$event,
+                                         NA)
+
+glimpse(panel_data)
+```
+
+## DiD Analysis with DiD Imputation Package
+
+```{r did_analysis}
+run_didimputation_analysis <- function(outcome_var, data) {
+    # Run didimputation - the package handles unbalanced panels internally
+    did_result <- did_imputation(
+        data = data,
+        yname = outcome_var,
+        gname = "event",
+        tname = "time",
+        idname = "repo_name",
+        first_stage = ~ age + ncloc + contributors + stars + issues | repo_name + time,
+        horizon = TRUE,
+        pretrends = TRUE
+    )
+
+    return(did_result)
+}
+
+# List of outcome variables
+outcome_vars <- c(
+    "commits",
+    "lines_added",
+    "code_smells",
+    "vulnerabilities",
+    "bugs",
+    "comment_lines_density",
+    "duplicated_lines_density",
+    "cognitive_complexity"
+)
+outcome_names <- c(
+    "Commits",
+    "Lines Added",
+    "Code Smells",
+    "Vulnerabilities",
+    "Bugs",
+    "Comment Lines Density",
+    "Duplicated Lines Density",
+    "Cognitive Complexity"
+)
+
+# Run DiD for each outcome and store results
+did_results <- list()
+for (var in outcome_vars) {
+    cat("Running analysis for:", var, "\n")
+    did_results[[var]] <- run_didimputation_analysis(var, panel_data)
+}
+```
+
+## Aggregate Treatment Effects
+
+```{r aggregate_effects}
+# Function to extract static treatment effects (overall effect)
+get_static_effects <- function(outcome_var, data) {
+    # Run static DiD (no horizon/pretrends specified)
+    static_result <- did_imputation(
+        data = data,
+        yname = outcome_var,
+        gname = "event",
+        tname = "time",
+        idname = "repo_name",
+        first_stage = ~ age + ncloc + contributors + stars + issues | repo_name + time
+    )
+
+    return(static_result)
+}
+
+# Calculate static effects for each outcome
+static_results <- list()
+for (var in outcome_vars) {
+    cat("Running static analysis for:", var, "\n")
+    static_results[[var]] <- get_static_effects(var, panel_data)
+}
+
+# Create a dataframe with all static effects
+static_df <- data.frame(
+    Outcome = names(static_results),
+    Estimate = sapply(static_results, function(x) x$estimate[x$term == "treat"]),
+    SE = sapply(static_results, function(x) x$std.error[x$term == "treat"]),
+    CI_Lower = sapply(static_results, function(x) x$conf.low[x$term == "treat"]),
+    CI_Upper = sapply(static_results, function(x) x$conf.high[x$term == "treat"])
+)
+
+# Clean outcome names for display
+static_df$Outcome <- gsub("log\\((.+) \\+ 1\\)", "\\1", static_df$Outcome)
+static_df$Outcome <- gsub("_", " ", static_df$Outcome)
+static_df$Outcome <- tools::toTitleCase(static_df$Outcome)
+
+# Display static effects
+knitr::kable(static_df,
+    digits = 3,
+    caption = "Static Treatment Effects of Cursor Adoption (DiD Imputation)"
+)
+```
+
+## Dynamic Treatment Effects (Event Study)
+
+```{r dynamic_analysis}
+# Function to run dynamic analysis for a given outcome
+run_dynamic_analysis <- function(outcome_var, data) {
+    # Run didimputation with horizon parameter for -6 to 6 months
+    dynamic_result <- did_imputation(
+        data = data,
+        yname = outcome_var,
+        gname = "event",
+        tname = "time",
+        idname = "repo_name",
+        first_stage = ~ age + ncloc + contributors + stars + issues | repo_name + time,
+        horizon = -6:6,
+        pretrends = -6:-1
+    )
+
+    return(dynamic_result)
+}
+
+# Run dynamic analysis for each outcome
+dynamic_results <- list()
+for (var in outcome_vars) {
+    cat("Running dynamic analysis for:", var, "\n")
+    dynamic_results[[var]] <- run_dynamic_analysis(var, panel_data)
+}
+```
+
+```{r event_study, fig.width=12, fig.height=8}
+# Function to plot event study for a given outcome
+plot_event_study <- function(did_result, title) {
+    # Filter for dynamic effects (exclude static "treat" term only)
+    dynamic_data <- did_result[did_result$term != "treat", ]
+
+    if (nrow(dynamic_data) == 0) {
+        cat("No dynamic effects available for", title, "\n")
+        return(NULL)
+    }
+
+    # Create a data frame for plotting
+    plot_data <- data.frame(
+        time = as.numeric(dynamic_data$term),
+        estimate = dynamic_data$estimate,
+        conf.low = dynamic_data$conf.low,
+        conf.high = dynamic_data$conf.high,
+        is_significant = (dynamic_data$conf.low > 0) | (dynamic_data$conf.high < 0)
+    )
+
+    # Plot
+    ggplot(plot_data, aes(x = time, y = estimate)) +
+        geom_point(aes(shape = is_significant), size = 3) +
+        scale_shape_manual(values = c("FALSE" = 1, "TRUE" = 16),
+                          labels = c("FALSE" = "Not Significant", "TRUE" = "Significant *")) +
+        geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.2) +
+        geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+        geom_vline(xintercept = 0, linetype = "dashed", color = "blue") +
+        scale_x_continuous(limits = c(-6, 6), breaks = -6:6) +
+        labs(
+            title = paste("Event Study:", title),
+            x = "Months Relative to Cursor Adoption",
+            y = "Treatment Effect",
+            shape = "Significance"
+        ) +
+        theme_minimal()
+}
+
+# Create plot list (only include valid plots)
+plot_list <- list()
+for (i in seq_along(outcome_vars)) {
+    if (outcome_vars[i] %in% names(dynamic_results)) {
+        plot_obj <- plot_event_study(dynamic_results[[outcome_vars[i]]], outcome_names[i])
+        if (!is.null(plot_obj)) {
+            plot_list[[length(plot_list) + 1]] <- plot_obj
+        }
+    }
+}
+
+# Combine plots if we have any
+if (length(plot_list) > 0) {
+    if (length(plot_list) == 1) {
+        # If only one plot, just display it
+        plot_list[[1]]
+    } else {
+        # If multiple plots, use grid.arrange
+        gridExtra::grid.arrange(grobs = plot_list, ncol = 2)
+    }
+}
+```

@@ -1,5 +1,5 @@
 ---
-title: "The Impact of Cursor Adoption on Velocity and Quality - DiD Package Approach"
+title: "The Impact of Cursor Adoption on Velocity and Quality - Callaway and Sant'Anna, (2021) DiD Approach"
 output: html_document
 ---
 
@@ -73,12 +73,22 @@ run_did_analysis <- function(outcome_var, data) {
 outcome_vars <- c(
     "commits",
     "lines_added",
-    #"code_smells",
-    #"vulnerabilities",
-    #"bugs",
+    "code_smells",
+    "vulnerabilities",
+    "bugs",
     "comment_lines_density",
-    #"duplicated_lines_density",
+    "duplicated_lines_density",
     "cognitive_complexity"
+)
+outcome_names <- c(
+    "Commits",
+    "Lines Added",
+    "Code Smells",
+    "Vulnerabilities",
+    "Bugs",
+    "Comment Lines Density",
+    "Duplicated Lines Density",
+    "Cognitive Complexity"
 )
 
 # Run DiD for each outcome and store results
@@ -152,18 +162,11 @@ plot_event_study <- function(did_result, title) {
         theme_minimal()
 }
 
-# Select key outcomes for visualization
-key_outcomes <- c(
-    "commits", "lines_added",
-    "cognitive_complexity", "comment_lines_density"
-)
-key_titles <- c("Commits", "Lines Added", "Cognitive Complexity", "Comment Lines Density")
-
 # Create plot list (only include valid plots)
 plot_list <- list()
-for (i in seq_along(key_outcomes)) {
-    if (key_outcomes[i] %in% names(did_results)) {
-        plot_list[[length(plot_list) + 1]] <- plot_event_study(did_results[[key_outcomes[i]]], key_titles[i])
+for (i in seq_along(outcome_vars)) {
+    if (outcome_vars[i] %in% names(did_results)) {
+        plot_list[[length(plot_list) + 1]] <- plot_event_study(did_results[[outcome_vars[i]]], outcome_names[i])
     }
 }
 

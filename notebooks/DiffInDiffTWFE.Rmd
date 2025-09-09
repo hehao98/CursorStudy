@@ -1,5 +1,5 @@
 ---
-title: "The Impact of Cursor Adoption on Velocity and Quality"
+title: "The Impact of Cursor Adoption on Velocity and Quality - TWFE DiD Approach"
 output: html_document
 ---
 
@@ -54,8 +54,9 @@ glimpse(panel_data)
 outcome_variables <- c(
     "log(commits + 1)" = "Commits",
     "log(lines_added + 1)" = "Lines Added",
-    #"log(bugs + 1)" = "Bugs",
-    #"log(code_smells + 1)" = "Code Smells",
+    "log(bugs + 1)" = "Bugs",
+    "log(code_smells + 1)" = "Code Smells",
+    "log(vulnerabilities + 1)" = "Vulnerabilities",
     #"log(delta_code_smells + 1)" = "New Code Smells",
     #"log(delta_vulnerabilities + 1)" = "New Vulnerabilities",
     #"log(delta_bugs + 1)" = "New Bugs",
@@ -63,8 +64,9 @@ outcome_variables <- c(
     #"log(delta_vulnerabilities / lines_added + 1)" = "New Vulnerabilities per Line Added",
     #"log(delta_bugs / lines_added + 1)" = "New Bugs per Line Added",
     "comment_lines_density" = "Comment Lines Density",
-    #"duplicated_lines_density" = "Duplicated Lines",
+    "duplicated_lines_density" = "Duplicated Lines",
     "log(cognitive_complexity + 1)" = "Cognitive Complexity"
+    #"log(technical_debt + 1)" = "Technical Debt"
     #"log(num_dependencies_total + 1)" = "Total Dependencies",
     #"log(num_vulnerable_dependencies + 1)" = "Vulnerable Dependencies",
     #"log(average_technical_lag + 1)" = "Average Technical Lag"

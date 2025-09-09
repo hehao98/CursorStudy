@@ -1,0 +1,400 @@
+---
+title: "The Impact of Cursor Adoption on Velocity and Quality - All DiD Methods Comparison"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+## Loading Required Packages
+
+```{r load_packages}
+library(did)
+library(didimputation)
+library(fixest)
+library(tidyverse)
+library(ggplot2)
+library(data.table)
+library(gridExtra)
+```
+
+## Loading and Preparing the Data
+
+```{r load_data}
+panel_data <- fread("../data/panel_event_monthly.csv")
+panel_data <- panel_data[panel_data$commits > 0]
+
+# Convert variables to DiD required format
+panel_data$repo_name <- as.numeric(factor(panel_data$repo_name))
+panel_data$time <- as.numeric(gsub("-", "", panel_data$time))
+panel_data$event[!is.na(panel_data$event)] <- as.numeric(
+    gsub("-", "", panel_data$event[!is.na(panel_data$event)]))
+panel_data$event[is.na(panel_data$event)] <- 0
+panel_data <- panel_data[panel_data$event < 202401 # never treated
+        | (panel_data$event > 202407 & panel_data$event <= 202503)]
+panel_data$event <- as.integer(panel_data$event)
+
+# Log transform skewed variables
+panel_data$commits <- log(panel_data$commits + 1)
+panel_data$lines_added <- log(panel_data$lines_added + 1)
+panel_data$code_smells <- log(panel_data$code_smells + 1)
+panel_data$vulnerabilities <- log(panel_data$vulnerabilities + 1)
+panel_data$bugs <- log(panel_data$bugs + 1)
+panel_data$cognitive_complexity <- log(panel_data$cognitive_complexity + 1)
+panel_data$duplicated_lines_density <- log(panel_data$duplicated_lines_density + 1)
+panel_data$comment_lines_density <- log(panel_data$comment_lines_density + 1)
+panel_data$age <- log(panel_data$age + 1)
+panel_data$contributors <- log(panel_data$contributors + 1)
+panel_data$stars <- log(panel_data$stars + 1)
+panel_data$issues <- log(panel_data$issues + 1)
+panel_data$issue_comments <- log(panel_data$issue_comments + 1)
+
+# For TWFE method
+panel_data$post_event <- ifelse(panel_data$time >= panel_data$event & panel_data$event > 0, 1, 0)
+panel_data$repo_name_fac <- as.factor(panel_data$repo_name)
+panel_data$time_fac <- as.factor(panel_data$time)
+
+# Create lead/lag variables for TWFE event study
+panel_data <- panel_data %>%
+    arrange(repo_name, time) %>%
+    group_by(repo_name) %>%
+    mutate(
+        lead_6 = ifelse(time == event - 6, 1, 0),
+        lead_5 = ifelse(time == event - 5, 1, 0),
+        lead_4 = ifelse(time == event - 4, 1, 0),
+        lead_3 = ifelse(time == event - 3, 1, 0),
+        lead_2 = ifelse(time == event - 2, 1, 0),
+        lag_0 = ifelse(time == event, 1, 0),
+        lag_1 = ifelse(time == event + 1, 1, 0),
+        lag_2 = ifelse(time == event + 2, 1, 0),
+        lag_3 = ifelse(time == event + 3, 1, 0),
+        lag_4 = ifelse(time == event + 4, 1, 0),
+        lag_5 = ifelse(time == event + 5, 1, 0),
+        lag_6 = ifelse(time == event + 6, 1, 0)
+    ) %>%
+    ungroup()
+```
+
+## Define Outcome Variables
+
+```{r define_outcomes}
+outcome_vars <- c(
+    "commits",
+    "lines_added",
+    "code_smells",
+    "vulnerabilities",
+    "bugs",
+    "comment_lines_density",
+    "duplicated_lines_density",
+    "cognitive_complexity"
+)
+outcome_names <- c(
+    "Commits",
+    "Lines Added",
+    "Code Smells",
+    "Vulnerabilities",
+    "Bugs",
+    "Comment Lines Density",
+    "Duplicated Lines Density",
+    "Cognitive Complexity"
+)
+```
+
+## Run All Three DiD Methods
+
+```{r run_methods}
+# Function to run Callaway & Sant'Anna method
+run_callaway <- function(outcome_var, data) {
+    result <- att_gt(
+        yname = outcome_var,
+        gname = "event",
+        idname = "repo_name",
+        tname = "time",
+        xformla = ~ age + ncloc + contributors + stars + issues,
+        data = data,
+        panel = TRUE,
+        allow_unbalanced_panel = TRUE,
+        anticipation = 1
+    )
+    return(result)
+}
+
+# Function to run Borusyak et al. method
+run_borusyak <- function(outcome_var, data) {
+    result <- did_imputation(
+        data = data,
+        yname = outcome_var,
+        gname = "event",
+        tname = "time",
+        idname = "repo_name",
+        first_stage = ~ age + ncloc + contributors + stars + issues | repo_name + time
+    )
+    return(result)
+}
+
+# Function to run TWFE method
+run_twfe <- function(outcome_var, data) {
+    formula_str <- paste0(
+        outcome_var, " ~ post_event + age + ncloc + contributors + stars + issues | repo_name_fac + time_fac"
+    )
+    model <- feols(as.formula(formula_str), data = data)
+    return(model)
+}
+
+# Run all methods for each outcome
+callaway_results <- list()
+borusyak_results <- list()
+twfe_results <- list()
+
+for (var in outcome_vars) {
+    cat("Running Callaway for:", var, "\n")
+    callaway_results[[var]] <- run_callaway(var, panel_data)
+
+    cat("Running Borusyak for:", var, "\n")
+    borusyak_results[[var]] <- run_borusyak(var, panel_data)
+
+    cat("Running TWFE for:", var, "\n")
+    twfe_results[[var]] <- run_twfe(var, panel_data)
+}
+```
+
+## Static Treatment Effects Comparison
+
+```{r static_effects}
+# Extract static effects from each method
+extract_static_effects <- function(results, method_name) {
+    effects_list <- list()
+
+    for (var in outcome_vars) {
+        if (method_name == "Callaway") {
+            agg <- aggte(results[[var]], type = "simple")
+            effects_list[[var]] <- data.frame(
+                outcome = var,
+                method = method_name,
+                estimate = agg$overall.att,
+                se = agg$overall.se,
+                conf.low = agg$overall.att - 1.96 * agg$overall.se,
+                conf.high = agg$overall.att + 1.96 * agg$overall.se
+            )
+        } else if (method_name == "Borusyak") {
+            result <- results[[var]]
+            treat_row <- result[result$term == "treat", ]
+            effects_list[[var]] <- data.frame(
+                outcome = var,
+                method = method_name,
+                estimate = treat_row$estimate,
+                se = treat_row$std.error,
+                conf.low = treat_row$conf.low,
+                conf.high = treat_row$conf.high
+            )
+        } else if (method_name == "TWFE") {
+            coef_table <- summary(results[[var]])$coeftable
+            effects_list[[var]] <- data.frame(
+                outcome = var,
+                method = method_name,
+                estimate = coef_table["post_event", "Estimate"],
+                se = coef_table["post_event", "Std. Error"],
+                conf.low = coef_table["post_event", "Estimate"] - 1.96 * coef_table["post_event", "Std. Error"],
+                conf.high = coef_table["post_event", "Estimate"] + 1.96 * coef_table["post_event", "Std. Error"]
+            )
+        }
+    }
+
+    return(do.call(rbind, effects_list))
+}
+
+# Combine all static effects
+static_effects <- rbind(
+    extract_static_effects(callaway_results, "Callaway"),
+    extract_static_effects(borusyak_results, "Borusyak"),
+    extract_static_effects(twfe_results, "TWFE")
+)
+
+# Create comparison plot
+static_plot <- ggplot(static_effects, aes(x = outcome, y = estimate, color = method)) +
+    geom_point(position = position_dodge(width = 0.3), size = 3) +
+    geom_errorbar(aes(ymin = conf.low, ymax = conf.high),
+                  position = position_dodge(width = 0.3), width = 0.2) +
+    geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+    labs(
+        title = "Static Treatment Effects Comparison",
+        x = "Outcome",
+        y = "Treatment Effect",
+        color = "Method"
+    ) +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+    scale_x_discrete(labels = tools::toTitleCase(gsub("_", " ", outcome_vars)))
+
+print(static_plot)
+```
+
+## Dynamic Treatment Effects (Event Study) Comparison
+
+```{r dynamic_effects}
+# Extract dynamic effects from each method
+extract_dynamic_effects <- function(results, method_name) {
+    effects_list <- list()
+
+    for (var in outcome_vars) {
+        if (method_name == "Callaway") {
+            dynamic_effects <- aggte(results[[var]], type = "dynamic", min_e = -6, max_e = 6)
+            effects_list[[var]] <- data.frame(
+                outcome = var,
+                method = method_name,
+                time = dynamic_effects$egt,
+                estimate = dynamic_effects$att.egt,
+                conf.low = dynamic_effects$att.egt - 1.96 * dynamic_effects$se.egt,
+                conf.high = dynamic_effects$att.egt + 1.96 * dynamic_effects$se.egt
+            )
+        } else if (method_name == "Borusyak") {
+            result <- results[[var]]
+            dynamic_data <- result[result$term != "treat", ]
+            effects_list[[var]] <- data.frame(
+                outcome = var,
+                method = method_name,
+                time = as.numeric(dynamic_data$term),
+                estimate = dynamic_data$estimate,
+                conf.low = dynamic_data$conf.low,
+                conf.high = dynamic_data$conf.high
+            )
+        } else if (method_name == "TWFE") {
+            # Run event study for TWFE
+            formula_str <- paste0(
+                var, " ~ lead_6 + lead_5 + lead_4 + lead_3 + lead_2 + ",
+                "lag_0 + lag_1 + lag_2 + lag_3 + lag_4 + lag_5 + lag_6 + ",
+                "age + ncloc + contributors + stars + issues | repo_name_fac + time_fac"
+            )
+            event_model <- feols(as.formula(formula_str), data = panel_data)
+
+            coefs <- coef(event_model)
+            ci <- confint(event_model)
+
+            time_periods <- c(-6:6)
+            estimates <- numeric(length(time_periods))
+            conf_low <- numeric(length(time_periods))
+            conf_high <- numeric(length(time_periods))
+
+            for (i in seq_along(time_periods)) {
+                t <- time_periods[i]
+                var_name <- if (t < 0) paste0("lead_", abs(t)) else paste0("lag_", t)
+
+                estimates[i] <- coefs[var_name]
+                conf_low[i] <- ci[var_name, 1]
+                conf_high[i] <- ci[var_name, 2]
+            }
+
+            effects_list[[var]] <- data.frame(
+                outcome = var,
+                method = method_name,
+                time = time_periods,
+                estimate = estimates,
+                conf.low = conf_low,
+                conf.high = conf_high
+            )
+        }
+    }
+
+    return(do.call(rbind, effects_list))
+}
+
+# Run dynamic analysis for Callaway and Borusyak
+callaway_dynamic <- list()
+borusyak_dynamic <- list()
+
+for (var in outcome_vars) {
+    cat("Running Callaway dynamic for:", var, "\n")
+    callaway_dynamic[[var]] <- run_callaway(var, panel_data)
+
+    cat("Running Borusyak dynamic for:", var, "\n")
+    borusyak_dynamic[[var]] <- did_imputation(
+        data = panel_data,
+        yname = var,
+        gname = "event",
+        tname = "time",
+        idname = "repo_name",
+        first_stage = ~ age + ncloc + contributors + stars + issues | repo_name + time,
+        horizon = -6:6,
+        pretrends = -6:-1
+    )
+}
+
+# Combine all dynamic effects
+dynamic_effects <- rbind(
+    extract_dynamic_effects(callaway_dynamic, "Callaway"),
+    extract_dynamic_effects(borusyak_dynamic, "Borusyak"),
+    extract_dynamic_effects(twfe_results, "TWFE")
+)
+
+# Create comparison plot
+dynamic_plot <- ggplot(dynamic_effects, aes(x = time, y = estimate, color = method)) +
+    geom_point(position = position_dodge(width = 0.2), size = 2) +
+    geom_errorbar(aes(ymin = conf.low, ymax = conf.high),
+                  position = position_dodge(width = 0.2), width = 0.2) +
+    geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+    geom_vline(xintercept = 0, linetype = "dashed", color = "blue") +
+    facet_wrap(~outcome, scales = "free_y", ncol = 4) +
+    scale_x_continuous(limits = c(-6, 6), breaks = -6:6) +
+    labs(
+        title = "Dynamic Treatment Effects Comparison (Event Study)",
+        x = "Months Relative to Cursor Adoption",
+        y = "Treatment Effect",
+        color = "Method"
+    ) +
+    theme_minimal() +
+    theme(legend.position = "bottom")
+
+print(dynamic_plot)
+```
+
+## Individual Outcome Plots
+
+```{r individual_plots, fig.width=12, fig.height=16}
+# Create individual plots for each outcome for better readability
+individual_plots <- list()
+
+for (i in seq_along(outcome_vars)) {
+    var <- outcome_vars[i]
+    name <- outcome_names[i]
+
+    plot_data <- dynamic_effects[dynamic_effects$outcome == var, ]
+
+    p <- ggplot(plot_data, aes(x = time, y = estimate, color = method)) +
+        geom_point(position = position_dodge(width = 0.2), size = 3) +
+        geom_errorbar(aes(ymin = conf.low, ymax = conf.high),
+                      position = position_dodge(width = 0.2), width = 0.2) +
+        geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+        geom_vline(xintercept = 0, linetype = "dashed", color = "blue") +
+        scale_x_continuous(limits = c(-6, 6), breaks = -6:6) +
+        labs(
+            title = paste("Event Study:", name),
+            x = "Months Relative to Cursor Adoption",
+            y = "Treatment Effect",
+            color = "Method"
+        ) +
+        theme_minimal() +
+        theme(legend.position = "bottom")
+
+    individual_plots[[i]] <- p
+}
+
+# Arrange plots in a grid
+do.call(gridExtra::grid.arrange, c(individual_plots, ncol = 2))
+```
+
+## Summary Table
+
+```{r summary_table}
+# Create summary table
+summary_table <- static_effects %>%
+    select(outcome, method, estimate, se) %>%
+    pivot_wider(names_from = method, values_from = c(estimate, se)) %>%
+    mutate(
+        outcome = tools::toTitleCase(gsub("_", " ", outcome))
+    )
+
+knitr::kable(summary_table,
+             digits = 3,
+             caption = "Treatment Effects Summary by Method")
+```
