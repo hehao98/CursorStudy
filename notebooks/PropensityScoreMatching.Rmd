@@ -132,6 +132,61 @@ stats_table_formatted %>%
   scroll_box(width = "100%", height = "600px")
 ```
 
+## Log-Transformed Box Plots by Metric and Group
+
+```{r log_boxplots, fig.width=14, fig.height=8}
+# Create log-transformed box plots excluding propensity score
+box_plot_data <- combined_data %>%
+  # Filter out propensity score
+  filter(Metric != "Propensity score") %>%
+  mutate(
+    # Apply log transformation with small constant for zeros
+    Value_log = log10(Value_transformed),
+    # Create cleaner metric labels
+    Metric_clean = case_when(
+      Metric == "Age days" ~ "Age (Days)",
+      Metric == "Users involved" ~ "Users Involved",
+      Metric == "N stars" ~ "Stars",
+      Metric == "N forks" ~ "Forks",
+      Metric == "N releases" ~ "Releases",
+      Metric == "N pulls" ~ "Pull Requests",
+      Metric == "N issues" ~ "Issues",
+      Metric == "N comments" ~ "Comments",
+      Metric == "Total events" ~ "Total Events",
+      TRUE ~ Metric
+    ),
+    # Reorder groups for better visualization
+    Group = factor(Group, levels = c("Treatment", "Matched Control", "All Candidates"))
+  )
+
+# Create the single combined box plot with log transformation
+box_plot <- ggplot(box_plot_data, aes(x = Metric_clean, y = Value_log, fill = Group)) +
+  geom_boxplot(alpha = 0.7, outlier.alpha = 0.5, position = position_dodge(width = 0.8)) +
+  scale_fill_manual(values = c(
+    "Treatment" = "#0072B2",      # Colorblind-friendly blue
+    "Matched Control" = "#009E73", # Colorblind-friendly green
+    "All Candidates" = "#CC79A7"     # Colorblind-friendly pink
+  )) +
+  labs(
+    x = "Metric",
+    y = "Log10 Transformed Values",
+    title = "Distribution of Repository Metrics by Group (Log Scale)",
+    fill = "Group"
+  ) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    plot.title = element_text(hjust = 0.5, face = "bold"),
+    legend.position = "bottom"
+  ) +
+  scale_y_continuous(expand = c(0, 0))
+
+print(box_plot)
+
+# Save the plot
+ggsave("../plots/log_boxplots_combined.pdf",
+  plot = box_plot, width = 14, height = 8)
+```
+
 ## Visualizing Propensity Score Distributions
 
 ```{r propensity_distributions, fig.width=5, fig.height=2.5}

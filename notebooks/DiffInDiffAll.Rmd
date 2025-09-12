@@ -17,13 +17,15 @@ library(tidyverse)
 library(ggplot2)
 library(data.table)
 library(gridExtra)
+library(knitr)
+library(kableExtra)
 ```
 
 ## Loading and Preparing the Data
 
 ```{r load_data}
 panel_data <- fread("../data/panel_event_monthly.csv")
-panel_data <- panel_data[panel_data$commits > 0]
+#panel_data <- panel_data[panel_data$commits > 0]
 
 # Convert variables to DiD required format
 panel_data$repo_name <- as.numeric(factor(panel_data$repo_name))
@@ -95,8 +97,8 @@ outcome_names <- c(
     "Code Smells",
     "Vulnerabilities",
     "Bugs",
-    "Comment Lines Density",
-    "Duplicated Lines Density",
+    "% Comment Lines",
+    "% Duplicated Lines",
     "Cognitive Complexity"
 )
 ```
@@ -148,26 +150,21 @@ borusyak_results <- list()
 twfe_results <- list()
 
 for (var in outcome_vars) {
-    cat("Running Callaway for:", var, "\n")
     callaway_results[[var]] <- run_callaway(var, panel_data)
-
-    cat("Running Borusyak for:", var, "\n")
     borusyak_results[[var]] <- run_borusyak(var, panel_data)
-
-    cat("Running TWFE for:", var, "\n")
     twfe_results[[var]] <- run_twfe(var, panel_data)
 }
 ```
 
 ## Static Treatment Effects Comparison
 
-```{r static_effects}
+```{r static_effects, fig.width=5, fig.height=5}
 # Extract static effects from each method
 extract_static_effects <- function(results, method_name) {
     effects_list <- list()
 
     for (var in outcome_vars) {
-        if (method_name == "Callaway") {
+        if (method_name == "Callaway and Sant'Anna") {
             agg <- aggte(results[[var]], type = "simple")
             effects_list[[var]] <- data.frame(
                 outcome = var,
@@ -177,7 +174,7 @@ extract_static_effects <- function(results, method_name) {
                 conf.low = agg$overall.att - 1.96 * agg$overall.se,
                 conf.high = agg$overall.att + 1.96 * agg$overall.se
             )
-        } else if (method_name == "Borusyak") {
+        } else if (method_name == "Borusyak et al.") {
             result <- results[[var]]
             treat_row <- result[result$term == "treat", ]
             effects_list[[var]] <- data.frame(
@@ -204,41 +201,121 @@ extract_static_effects <- function(results, method_name) {
     return(do.call(rbind, effects_list))
 }
 
-# Combine all static effects
+# Combine all static effects (reorder with Callaway last)
 static_effects <- rbind(
-    extract_static_effects(callaway_results, "Callaway"),
-    extract_static_effects(borusyak_results, "Borusyak"),
-    extract_static_effects(twfe_results, "TWFE")
+    extract_static_effects(twfe_results, "TWFE"),
+    extract_static_effects(borusyak_results, "Borusyak et al."),
+    extract_static_effects(callaway_results, "Callaway and Sant'Anna")
 )
 
-# Create comparison plot
+# Create factor for proper ordering and labeling
+static_effects$outcome <- factor(static_effects$outcome,
+                                 levels = outcome_vars,
+                                 labels = outcome_names)
+
+# Create comparison plot with colorblind-friendly palette
 static_plot <- ggplot(static_effects, aes(x = outcome, y = estimate, color = method)) +
     geom_point(position = position_dodge(width = 0.3), size = 3) +
     geom_errorbar(aes(ymin = conf.low, ymax = conf.high),
                   position = position_dodge(width = 0.3), width = 0.2) +
-    geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+    geom_hline(yintercept = 0, linetype = "dashed", color = "red", size = 1) +
+    scale_color_manual(values = c(
+        "TWFE" = "#CC79A7",                    # Colorblind-friendly pink
+        "Borusyak et al." = "#009E73",         # Colorblind-friendly green
+        "Callaway and Sant'Anna" = "#0072B2"   # Colorblind-friendly blue
+    )) +
     labs(
-        title = "Static Treatment Effects Comparison",
         x = "Outcome",
         y = "Treatment Effect",
-        color = "Method"
+        color = "Estimator"
     ) +
     theme_minimal() +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
-    scale_x_discrete(labels = tools::toTitleCase(gsub("_", " ", outcome_vars)))
+    theme(
+        axis.text.x = element_text(angle = 45, hjust = 1, size = 8),
+        axis.title.x = element_text(size = 9),
+        axis.title.y = element_text(size = 9),
+        axis.text.y = element_text(size = 8),
+        panel.grid = element_blank(),
+        axis.line = element_line(color = "black", size = 0.3),
+        axis.ticks = element_line(color = "black", size = 0.3),
+        legend.position = "top"
+    )
 
 print(static_plot)
+
+ggsave("../plots/static_effects.pdf",
+  plot = static_plot, width = 5, height = 5)
+```
+
+## Static Treatment Effects Table
+
+```{r static_effects_table}
+# Add significance levels and formatting
+static_table <- static_effects %>%
+    mutate(
+        # Calculate p-values (two-tailed test)
+        z_stat = estimate / se,
+        p_value = 2 * (1 - pnorm(abs(z_stat))),
+
+        # Create significance stars
+        significance = case_when(
+            p_value < 0.001 ~ "***",
+            p_value < 0.01 ~ "**",
+            p_value < 0.05 ~ "*",
+            p_value < 0.1 ~ ".",
+            TRUE ~ ""
+        ),
+
+        # Format estimates and standard errors
+        estimate_formatted = sprintf("%.4f", estimate),
+        se_formatted = sprintf("(%.4f)", se),
+
+        # Combine estimate with significance
+        estimate_sig = paste0(estimate_formatted, significance)
+    ) %>%
+    select(outcome, method, estimate_sig, se_formatted, p_value) %>%
+    arrange(outcome, method)
+
+# Reshape to wide format for better presentation
+static_table_wide <- static_table %>%
+    pivot_wider(
+        id_cols = outcome,
+        names_from = method,
+        values_from = c(estimate_sig, se_formatted),
+        names_sep = "_"
+    ) %>%
+    select(
+        outcome,
+        `estimate_sig_TWFE`, `se_formatted_TWFE`,
+        `estimate_sig_Borusyak et al.`, `se_formatted_Borusyak et al.`,
+        `estimate_sig_Callaway and Sant'Anna`, `se_formatted_Callaway and Sant'Anna`
+    )
+
+# Create the final table
+kable(static_table_wide,
+      col.names = c("Outcome",
+                    "Estimate", "Std. Error",
+                    "Estimate", "Std. Error",
+                    "Estimate", "Std. Error"),
+      caption = "Static Treatment Effects: Impact of Cursor Adoption",
+      align = c("l", rep("r", 6))) %>%
+    kable_styling(bootstrap_options = c("striped", "hover", "condensed"),
+                  full_width = FALSE,
+                  font_size = 12) %>%
+    add_header_above(c(" " = 1, "TWFE" = 2, "Borusyak et al." = 2, "Callaway and Sant'Anna" = 2)) %>%
+    footnote(general = "Significance levels: *** p<0.001, ** p<0.01, * p<0.05, . p<0.1",
+             general_title = "Note:")
 ```
 
 ## Dynamic Treatment Effects (Event Study) Comparison
 
-```{r dynamic_effects}
+```{r dynamic_effects, fig.width=12, fig.height=5}
 # Extract dynamic effects from each method
 extract_dynamic_effects <- function(results, method_name) {
     effects_list <- list()
 
     for (var in outcome_vars) {
-        if (method_name == "Callaway") {
+        if (method_name == "Callaway and Sant'Anna") {
             dynamic_effects <- aggte(results[[var]], type = "dynamic", min_e = -6, max_e = 6)
             effects_list[[var]] <- data.frame(
                 outcome = var,
@@ -248,7 +325,7 @@ extract_dynamic_effects <- function(results, method_name) {
                 conf.low = dynamic_effects$att.egt - 1.96 * dynamic_effects$se.egt,
                 conf.high = dynamic_effects$att.egt + 1.96 * dynamic_effects$se.egt
             )
-        } else if (method_name == "Borusyak") {
+        } else if (method_name == "Borusyak et al.") {
             result <- results[[var]]
             dynamic_data <- result[result$term != "treat", ]
             effects_list[[var]] <- data.frame(
@@ -259,7 +336,7 @@ extract_dynamic_effects <- function(results, method_name) {
                 conf.low = dynamic_data$conf.low,
                 conf.high = dynamic_data$conf.high
             )
-        } else if (method_name == "TWFE") {
+        } else if (method_name == "Two Way Fixed Effects") {
             # Run event study for TWFE
             formula_str <- paste0(
                 var, " ~ lead_6 + lead_5 + lead_4 + lead_3 + lead_2 + ",
@@ -304,10 +381,8 @@ callaway_dynamic <- list()
 borusyak_dynamic <- list()
 
 for (var in outcome_vars) {
-    cat("Running Callaway dynamic for:", var, "\n")
     callaway_dynamic[[var]] <- run_callaway(var, panel_data)
 
-    cat("Running Borusyak dynamic for:", var, "\n")
     borusyak_dynamic[[var]] <- did_imputation(
         data = panel_data,
         yname = var,
@@ -320,65 +395,69 @@ for (var in outcome_vars) {
     )
 }
 
-# Combine all dynamic effects
+# Combine all dynamic effects (reorder with Callaway last)
 dynamic_effects <- rbind(
-    extract_dynamic_effects(callaway_dynamic, "Callaway"),
-    extract_dynamic_effects(borusyak_dynamic, "Borusyak"),
-    extract_dynamic_effects(twfe_results, "TWFE")
+    extract_dynamic_effects(twfe_results, "Two Way Fixed Effects"),
+    extract_dynamic_effects(borusyak_dynamic, "Borusyak et al."),
+    extract_dynamic_effects(callaway_dynamic, "Callaway and Sant'Anna")
 )
 
-# Create comparison plot
+# Create factor for proper ordering and labeling
+dynamic_effects$outcome <- factor(dynamic_effects$outcome,
+                                  levels = outcome_vars,
+                                  labels = outcome_names)
+
+# Add significance indicators for visual styling
+dynamic_effects <- dynamic_effects %>%
+    mutate(
+        # Calculate standard error from confidence intervals (approximate)
+        se = (conf.high - conf.low) / (2 * 1.96),
+        # Calculate z-statistic
+        z_stat = estimate / se,
+        # Calculate p-value (two-tailed)
+        p_value = 2 * (1 - pnorm(abs(z_stat))),
+        # Create significance indicator
+        significant = p_value < 0.05,
+        # Create aesthetic variables
+        point_shape = ifelse(significant, 19, 21),  # filled vs hollow circles
+        line_type = ifelse(significant, "solid", "dotted")
+    )
+
+# Create comparison plot with significance-based styling
 dynamic_plot <- ggplot(dynamic_effects, aes(x = time, y = estimate, color = method)) +
-    geom_point(position = position_dodge(width = 0.2), size = 2) +
-    geom_errorbar(aes(ymin = conf.low, ymax = conf.high),
-                  position = position_dodge(width = 0.2), width = 0.2) +
+    # Add significant points (filled)
+    geom_point(data = filter(dynamic_effects, significant),
+               position = position_dodge(width = 0.5), size = 2, shape = 19) +
+    # Add non-significant points (hollow)
+    geom_point(data = filter(dynamic_effects, !significant),
+               position = position_dodge(width = 0.5), size = 2, shape = 21, fill = "white") +
+    # Add error bars for significant effects (solid)
+    geom_errorbar(data = filter(dynamic_effects, significant),
+                  aes(ymin = conf.low, ymax = conf.high),
+                  position = position_dodge(width = 0.5), width = 0.2, linetype = "solid") +
+    # Add error bars for non-significant effects (dotted)
+    geom_errorbar(data = filter(dynamic_effects, !significant),
+                  aes(ymin = conf.low, ymax = conf.high),
+                  position = position_dodge(width = 0.5), width = 0.2, linetype = "dotted") +
     geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
     geom_vline(xintercept = 0, linetype = "dashed", color = "blue") +
+    scale_color_manual(values = c(
+        "Two Way Fixed Effects" = "#CC79A7",                    # Colorblind-friendly pink
+        "Borusyak et al." = "#009E73",         # Colorblind-friendly green
+        "Callaway and Sant'Anna" = "#0072B2"   # Colorblind-friendly blue
+    )) +
     facet_wrap(~outcome, scales = "free_y", ncol = 4) +
     scale_x_continuous(limits = c(-6, 6), breaks = -6:6) +
     labs(
-        title = "Dynamic Treatment Effects Comparison (Event Study)",
         x = "Months Relative to Cursor Adoption",
         y = "Treatment Effect",
-        color = "Method"
+        color = "Estimator"
     ) +
     theme_minimal() +
     theme(legend.position = "bottom")
 
 print(dynamic_plot)
-```
 
-## Individual Outcome Plots
-
-```{r individual_plots, fig.width=12, fig.height=16}
-# Create individual plots for each outcome for better readability
-individual_plots <- list()
-
-for (i in seq_along(outcome_vars)) {
-    var <- outcome_vars[i]
-    name <- outcome_names[i]
-
-    plot_data <- dynamic_effects[dynamic_effects$outcome == var, ]
-
-    p <- ggplot(plot_data, aes(x = time, y = estimate, color = method)) +
-        geom_point(position = position_dodge(width = 0.2), size = 3) +
-        geom_errorbar(aes(ymin = conf.low, ymax = conf.high),
-                      position = position_dodge(width = 0.2), width = 0.2) +
-        geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
-        geom_vline(xintercept = 0, linetype = "dashed", color = "blue") +
-        scale_x_continuous(limits = c(-6, 6), breaks = -6:6) +
-        labs(
-            title = paste("Event Study:", name),
-            x = "Months Relative to Cursor Adoption",
-            y = "Treatment Effect",
-            color = "Method"
-        ) +
-        theme_minimal() +
-        theme(legend.position = "bottom")
-
-    individual_plots[[i]] <- p
-}
-
-# Arrange plots in a grid
-do.call(gridExtra::grid.arrange, c(individual_plots, ncol = 2))
+ggsave("../plots/dynamic_effects.pdf",
+  plot = dynamic_plot, width = 12, height = 5)
 ```

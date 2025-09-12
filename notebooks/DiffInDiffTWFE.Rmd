@@ -26,6 +26,7 @@ panel_data <- fread("../data/panel_event_monthly.csv")
 
 # panel_data <- panel_data[panel_data$is_treatment == 1] # only treatment group
 # panel_data <- panel_data[panel_data$commits > 0] # exclude inactive months
+# panel_data <- panel_data[panel_data$commits >= 10] # only include very active repos
 # panel_data <- panel_data[panel_data$time <= "2025-06"] # remove two months of data where other agents are present
 
 # Compute churn

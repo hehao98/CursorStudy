@@ -1,0 +1,145 @@
+---
+title: "Descriptive Pre-Post Analysis: Raw Event Plots"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+## Loading Required Packages
+
+```{r load_packages}
+library(tidyverse)
+library(ggplot2)
+library(data.table)
+library(cowplot)
+library(scales)
+```
+
+## Loading and Preparing the Data
+
+```{r load_data}
+panel_data <- fread("../data/panel_event_monthly.csv")
+
+# Convert variables to proper format
+panel_data$repo_name <- as.numeric(factor(panel_data$repo_name))
+panel_data$time <- as.numeric(gsub("-", "", panel_data$time))
+panel_data$event[!is.na(panel_data$event)] <- as.numeric(
+    gsub("-", "", panel_data$event[!is.na(panel_data$event)]))
+panel_data$event[is.na(panel_data$event)] <- 0
+panel_data <- panel_data[panel_data$event < 202401 # never treated
+        | (panel_data$event > 202407 & panel_data$event <= 202503)]
+panel_data$event <- as.integer(panel_data$event)
+
+# Log transform skewed variables (same as DiffInDiffAll.Rmd)
+panel_data$commits <- log(panel_data$commits + 1)
+panel_data$lines_added <- log(panel_data$lines_added + 1)
+panel_data$code_smells <- log(panel_data$code_smells + 1)
+panel_data$vulnerabilities <- log(panel_data$vulnerabilities + 1)
+panel_data$bugs <- log(panel_data$bugs + 1)
+panel_data$cognitive_complexity <- log(panel_data$cognitive_complexity + 1)
+panel_data$duplicated_lines_density <- log(panel_data$duplicated_lines_density + 1)
+panel_data$comment_lines_density <- log(panel_data$comment_lines_density + 1)
+panel_data$age <- log(panel_data$age + 1)
+panel_data$contributors <- log(panel_data$contributors + 1)
+panel_data$stars <- log(panel_data$stars + 1)
+panel_data$issues <- log(panel_data$issues + 1)
+panel_data$issue_comments <- log(panel_data$issue_comments + 1)
+```
+
+## Create Relative Time Variables
+
+```{r create_relative_time}
+# Filter to only include treatment repositories (those that adopted Cursor)
+panel_data <- panel_data %>%
+    filter(event > 0) %>%  # Only repositories that actually adopted Cursor
+    arrange(repo_name, time) %>%
+    group_by(repo_name) %>%
+    mutate(
+        # Calculate relative time to event
+        relative_time = time - event
+    ) %>%
+    ungroup() %>%
+    # Filter to only include observations within -6 to +6 months of event
+    filter(relative_time >= -6 & relative_time <= 6)
+
+# Check data structure
+cat("Number of observations:", nrow(panel_data), "\n")
+cat("Number of unique repositories:", length(unique(panel_data$repo_name)), "\n")
+cat("Relative time range:", range(panel_data$relative_time), "\n")
+```
+
+## Define Outcome Variables
+
+```{r define_outcomes}
+outcome_vars <- c(
+    "commits",
+    "lines_added",
+    "code_smells",
+    "vulnerabilities",
+    "bugs",
+    "comment_lines_density",
+    "duplicated_lines_density",
+    "cognitive_complexity"
+)
+
+outcome_names <- c(
+    "Commits (log)",
+    "Lines Added (log)",
+    "Code Smells (log)",
+    "Vulnerabilities (log)",
+    "Bugs (log)",
+    "%Comment Lines (log)",
+    "%Duplicated Lines (log)",
+    "Cognitive Complexity (log)"
+)
+```
+
+## Raw Event Plots with Boxplots
+
+```{r raw_event_plots, fig.width=5, fig.height=7}
+# Create boxplots for each outcome variable
+plot_list <- list()
+
+# Create boxplots for each outcome variable with x-axis labels on all plots
+for (i in seq_along(outcome_vars)) {
+    var <- outcome_vars[i]
+    name <- outcome_names[i]
+
+    # Create boxplot for current outcome
+    p <- ggplot(panel_data, aes(x = factor(relative_time), y = !!sym(var))) +
+        geom_boxplot(alpha = 0.7, outlier.alpha = 0.5, fill = "#0072B2") +
+        geom_vline(xintercept = which(levels(factor(panel_data$relative_time)) == "0"),
+                   linetype = "dashed", color = "red", size = 1) +
+        labs(x = "Months Relative to Adoption",
+            y = name
+        ) +
+        theme_minimal() +
+        theme(
+            plot.title = element_text(hjust = 0.5, face = "bold"),
+            plot.subtitle = element_text(hjust = 0.5),
+            axis.text.x = element_text(angle = 0, hjust = 0.5, size = 8),
+            axis.title.x = element_text(size = 9),
+            axis.title.y = element_text(size = 9),
+            axis.text.y = element_text(size = 8),
+            plot.margin = margin(2, 2, 2, 2, "pt"),
+            panel.grid = element_blank(),
+            axis.line = element_line(color = "black", size = 0.3),
+            axis.ticks = element_line(color = "black", size = 0.3)
+        ) +
+        scale_y_continuous(expand = c(0.02, 0), labels = scales::number_format(accuracy = 0.1))
+
+    plot_list[[i]] <- p
+}
+
+# Arrange plots in a grid with proper alignment using cowplot
+combined_plot <- plot_grid(plotlist = plot_list, ncol = 2, align = "hv", axis = "tblr")
+
+# Display the plot
+print(combined_plot)
+
+# Save the plot
+ggsave("../plots/descriptive_pre_post.pdf",
+  plot = combined_plot, width = 5, height = 7)
+```
