@@ -105,3 +105,20 @@ dynamic_model_commits <- pgmm(
 
 summary(dynamic_model_commits)
 ```
+
+```{r dynamic_model_cognitive_complexity}
+dynamic_model_cognitive_complexity <- pgmm(
+    formula = cognitive_complexity ~ lag(cognitive_complexity, 1) + lag(cognitive_complexity, 2) + lag(cognitive_complexity, 3) +
+        post_event + lag(lines_added, 1) + lag(lines_added, 2) + lag(lines_added, 3) +
+        log(ncloc + 1) + log(age + 1) + log(contributors + 1) + log(stars + 1) +
+        log(issues + 1) |
+        lag(cognitive_complexity, 4:7),
+    data = pdyn,
+    effect = "twoways",
+    model = "onestep",
+    transformation = "d",
+    collapse = TRUE
+)
+
+summary(dynamic_model_cognitive_complexity)
+```

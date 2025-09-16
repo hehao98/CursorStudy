@@ -38,11 +38,23 @@ panel_data <- panel_data[panel_data$event < 202401 # never treated
         | (panel_data$event > 202407 & panel_data$event <= 202503)]
 panel_data$event <- as.integer(panel_data$event)
 
-# Create ratio metrics before log transformation
-# Avoid division by zero by adding a small constant
-panel_data$code_smells_per_line <- panel_data$code_smells / (panel_data$lines_added + 1)
-panel_data$vulnerabilities_per_line <- panel_data$vulnerabilities / (panel_data$lines_added + 1)
-panel_data$bugs_per_line <- panel_data$bugs / (panel_data$lines_added + 1)
+# Create delta metrics before log transformation
+# First, sort data and compute changes from previous time point
+panel_data <- panel_data %>%
+    arrange(repo_name, time) %>%
+    group_by(repo_name) %>%
+    mutate(
+        # Compute changes from previous time point
+        delta_code_smells = code_smells - lag(code_smells, default = 0),
+        delta_vulnerabilities = vulnerabilities - lag(vulnerabilities, default = 0),
+        delta_bugs = bugs - lag(bugs, default = 0),
+
+        # Compute delta per line added (avoid division by zero)
+        code_smells_per_line = delta_code_smells / (lines_added + 1),
+        vulnerabilities_per_line = delta_vulnerabilities / (lines_added + 1),
+        bugs_per_line = delta_bugs / (lines_added + 1)
+    ) %>%
+    ungroup()
 
 # Log transform skewed variables
 panel_data$commits <- log(panel_data$commits + 1)
@@ -59,10 +71,11 @@ panel_data$stars <- log(panel_data$stars + 1)
 panel_data$issues <- log(panel_data$issues + 1)
 panel_data$issue_comments <- log(panel_data$issue_comments + 1)
 
-# Log transform the new ratio metrics
-panel_data$code_smells_per_line <- log(panel_data$code_smells_per_line + 1)
-panel_data$vulnerabilities_per_line <- log(panel_data$vulnerabilities_per_line + 1)
-panel_data$bugs_per_line <- log(panel_data$bugs_per_line + 1)
+# Handle delta metrics transformation (can be negative, so use signed log)
+# Use signed log transformation: sign(x) * log(|x| + 1)
+panel_data$code_smells_per_line <- sign(panel_data$code_smells_per_line) * log(abs(panel_data$code_smells_per_line) + 1)
+panel_data$vulnerabilities_per_line <- sign(panel_data$vulnerabilities_per_line) * log(abs(panel_data$vulnerabilities_per_line) + 1)
+panel_data$bugs_per_line <- sign(panel_data$bugs_per_line) * log(abs(panel_data$bugs_per_line) + 1)
 
 # For TWFE method
 panel_data$post_event <- ifelse(panel_data$time >= panel_data$event & panel_data$event > 0, 1, 0)
@@ -101,7 +114,10 @@ outcome_vars <- c(
     "bugs",
     "comment_lines_density",
     "duplicated_lines_density",
-    "cognitive_complexity"
+    "cognitive_complexity",
+    "code_smells_per_line",
+    "vulnerabilities_per_line",
+    "bugs_per_line"
 )
 outcome_names <- c(
     "Commits",
@@ -111,7 +127,10 @@ outcome_names <- c(
     "Bugs",
     "% Comment Lines",
     "% Duplicated Lines",
-    "Cognitive Complexity"
+    "Cognitive Complexity",
+    "\u0394 Code Smells per Line Added",
+    "\u0394 Vulnerabilities per Line Added",
+    "\u0394 Bugs per Line Added"
 )
 ```
 
@@ -259,7 +278,8 @@ static_plot <- ggplot(static_effects, aes(x = outcome, y = estimate, color = met
 print(static_plot)
 
 ggsave("../plots/static_effects.pdf",
-  plot = static_plot, width = 5, height = 5)
+  plot = static_plot, width = 5, height = 5,
+  device = cairo_pdf)
 ```
 
 ## Static Treatment Effects Table
@@ -324,7 +344,7 @@ kable(static_table_wide,
 
 ## Dynamic Treatment Effects (Event Study) Comparison
 
-```{r dynamic_effects, fig.width=10.5, fig.height=5}
+```{r dynamic_effects, fig.width=10.5, fig.height=7.5}
 # Extract dynamic effects from each method
 extract_dynamic_effects <- function(results, method_name, variables = NULL) {
     effects_list <- list()
@@ -469,315 +489,19 @@ dynamic_plot <- ggplot(dynamic_effects, aes(x = time, y = estimate, color = meth
     labs(
         x = "Months Relative to Cursor Adoption",
         y = "Treatment Effect",
-        color = "Estimator"
+        color = "Estimator",
+        caption = "Filled dots: p < 0.05 (significant), Hollow dots: p ≥ 0.05 (non-significant)"
     ) +
     theme_minimal() +
-    theme(legend.position = "bottom")
+    theme(
+        legend.position = "bottom",
+        plot.caption = element_text(hjust = 0.5, size = 10, margin = margin(t = 10)),
+        legend.margin = margin(b = 5)
+    )
 
 print(dynamic_plot)
 
 ggsave("../plots/dynamic_effects.pdf",
-  plot = dynamic_plot, width = 10.5, height = 5)
-```
-
-## Dynamic Treatment Effects - Velocity Outcomes Only
-
-```{r velocity_dynamic_plot, fig.width=8, fig.height=4}
-# Define velocity-related outcomes
-velocity_vars <- c("commits", "lines_added")
-velocity_names <- c("Commits", "Lines Added")
-
-# Filter dynamic effects for velocity outcomes only
-velocity_dynamic_effects <- dynamic_effects %>%
-    filter(outcome %in% velocity_names)
-
-# Create velocity-focused dynamic plot
-velocity_dynamic_plot <- ggplot(velocity_dynamic_effects, aes(x = time, y = estimate, color = method)) +
-    # Add significant points (filled)
-    geom_point(data = filter(velocity_dynamic_effects, significant),
-               position = position_dodge(width = 0.5), size = 2.5, shape = 19) +
-    # Add non-significant points (hollow)
-    geom_point(data = filter(velocity_dynamic_effects, !significant),
-               position = position_dodge(width = 0.5), size = 2.5, shape = 21, fill = "transparent") +
-    # Add error bars for significant effects (solid)
-    geom_errorbar(data = filter(velocity_dynamic_effects, significant),
-                  aes(ymin = conf.low, ymax = conf.high),
-                  position = position_dodge(width = 0.5), width = 0.2, linetype = "solid") +
-    # Add error bars for non-significant effects (dotted)
-    geom_errorbar(data = filter(velocity_dynamic_effects, !significant),
-                  aes(ymin = conf.low, ymax = conf.high),
-                  position = position_dodge(width = 0.5), width = 0.2, linetype = "dotted") +
-    geom_hline(yintercept = 0, linetype = "dashed", color = "red", size = 0.8) +
-    geom_vline(xintercept = 0, linetype = "dashed", color = "blue", size = 0.8) +
-    scale_color_manual(values = c(
-        "Two Way Fixed Effects" = "#CC79A7",
-        "Borusyak et al." = "#009E73",
-        "Callaway and Sant'Anna" = "#0072B2"
-    )) +
-    facet_wrap(~outcome, scales = "free_y", ncol = 2) +
-    scale_x_continuous(limits = c(-6, 6), breaks = -6:6) +
-    labs(
-        title = "Dynamic Treatment Effects: Velocity Outcomes",
-        x = "Months Relative to Cursor Adoption",
-        y = "Treatment Effect",
-        color = "Estimator",
-        caption = "Filled points: p < 0.05, Hollow points: p ≥ 0.05"
-    ) +
-    theme_minimal() +
-    theme(
-        legend.position = "bottom",
-        plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
-        strip.text = element_text(size = 12, face = "bold"),
-        axis.title = element_text(size = 11),
-        panel.grid.minor = element_blank()
-    )
-
-print(velocity_dynamic_plot)
-
-ggsave("../plots/velocity_dynamic_effects.pdf",
-  plot = velocity_dynamic_plot, width = 8, height = 4)
-```
-
-## Dynamic Treatment Effects - Quality Outcomes Only
-
-```{r quality_dynamic_plot, fig.width=12, fig.height=8}
-# Define quality-related outcomes
-quality_vars <- c("code_smells", "vulnerabilities", "bugs",
-                  "comment_lines_density", "duplicated_lines_density", "cognitive_complexity")
-quality_names <- c("Code Smells", "Vulnerabilities", "Bugs",
-                   "% Comment Lines", "% Duplicated Lines", "Cognitive Complexity")
-
-# Filter dynamic effects for quality outcomes only
-quality_dynamic_effects <- dynamic_effects %>%
-    filter(outcome %in% quality_names)
-
-# Create quality-focused dynamic plot
-quality_dynamic_plot <- ggplot(quality_dynamic_effects, aes(x = time, y = estimate, color = method)) +
-    # Add significant points (filled)
-    geom_point(data = filter(quality_dynamic_effects, significant),
-               position = position_dodge(width = 0.5), size = 2.5, shape = 19) +
-    # Add non-significant points (hollow)
-    geom_point(data = filter(quality_dynamic_effects, !significant),
-               position = position_dodge(width = 0.5), size = 2.5, shape = 21, fill = "transparent") +
-    # Add error bars for significant effects (solid)
-    geom_errorbar(data = filter(quality_dynamic_effects, significant),
-                  aes(ymin = conf.low, ymax = conf.high),
-                  position = position_dodge(width = 0.5), width = 0.2, linetype = "solid") +
-    # Add error bars for non-significant effects (dotted)
-    geom_errorbar(data = filter(quality_dynamic_effects, !significant),
-                  aes(ymin = conf.low, ymax = conf.high),
-                  position = position_dodge(width = 0.5), width = 0.2, linetype = "dotted") +
-    geom_hline(yintercept = 0, linetype = "dashed", color = "red", size = 0.8) +
-    geom_vline(xintercept = 0, linetype = "dashed", color = "blue", size = 0.8) +
-    scale_color_manual(values = c(
-        "Two Way Fixed Effects" = "#CC79A7",
-        "Borusyak et al." = "#009E73",
-        "Callaway and Sant'Anna" = "#0072B2"
-    )) +
-    facet_wrap(~outcome, scales = "free_y", ncol = 3) +
-    scale_x_continuous(limits = c(-6, 6), breaks = -6:6) +
-    labs(
-        title = "Dynamic Treatment Effects: Quality Outcomes",
-        x = "Months Relative to Cursor Adoption",
-        y = "Treatment Effect",
-        color = "Estimator",
-        caption = "Filled points: p < 0.05, Hollow points: p ≥ 0.05"
-    ) +
-    theme_minimal() +
-    theme(
-        legend.position = "bottom",
-        plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
-        strip.text = element_text(size = 12, face = "bold"),
-        axis.title = element_text(size = 11),
-        panel.grid.minor = element_blank()
-    )
-
-print(quality_dynamic_plot)
-
-ggsave("../plots/quality_dynamic_effects.pdf",
-  plot = quality_dynamic_plot, width = 12, height = 8)
-```
-
-## Static Treatment Effects Table - Ratio Metrics Only
-
-```{r ratio_static_table}
-# Define ratio-related outcomes
-ratio_vars <- c("code_smells_per_line", "vulnerabilities_per_line", "bugs_per_line")
-ratio_names <- c("Code Smells per Line", "Vulnerabilities per Line", "Bugs per Line")
-
-# Run all methods for ratio variables
-ratio_callaway_results <- list()
-ratio_borusyak_results <- list()
-ratio_twfe_results <- list()
-
-for (var in ratio_vars) {
-    ratio_callaway_results[[var]] <- run_callaway(var, panel_data)
-    ratio_borusyak_results[[var]] <- run_borusyak(var, panel_data)
-    ratio_twfe_results[[var]] <- run_twfe(var, panel_data)
-}
-
-# Extract static effects for ratio variables
-ratio_static_effects <- rbind(
-    extract_static_effects(ratio_twfe_results, "TWFE", ratio_vars),
-    extract_static_effects(ratio_borusyak_results, "Borusyak et al.", ratio_vars),
-    extract_static_effects(ratio_callaway_results, "Callaway and Sant'Anna", ratio_vars)
-)
-
-# Create factor for proper ordering and labeling
-ratio_static_effects$outcome <- factor(ratio_static_effects$outcome,
-                                      levels = ratio_vars,
-                                      labels = ratio_names)
-
-# Create ratio-focused static table
-ratio_static_table <- ratio_static_effects %>%
-    mutate(
-        # Calculate p-values (two-tailed test)
-        z_stat = estimate / se,
-        p_value = 2 * (1 - pnorm(abs(z_stat))),
-
-        # Create significance stars
-        significance = case_when(
-            p_value < 0.001 ~ "***",
-            p_value < 0.01 ~ "**",
-            p_value < 0.05 ~ "*",
-            p_value < 0.1 ~ ".",
-            TRUE ~ ""
-        ),
-
-        # Format estimates and standard errors
-        estimate_formatted = sprintf("%.4f", estimate),
-        se_formatted = sprintf("(%.4f)", se),
-
-        # Combine estimate with significance
-        estimate_sig = paste0(estimate_formatted, significance)
-    ) %>%
-    select(outcome, method, estimate_sig, se_formatted, p_value) %>%
-    arrange(outcome, method)
-
-# Reshape to wide format for better presentation
-ratio_static_table_wide <- ratio_static_table %>%
-    pivot_wider(
-        id_cols = outcome,
-        names_from = method,
-        values_from = c(estimate_sig, se_formatted),
-        names_sep = "_"
-    ) %>%
-    select(
-        outcome,
-        `estimate_sig_TWFE`, `se_formatted_TWFE`,
-        `estimate_sig_Borusyak et al.`, `se_formatted_Borusyak et al.`,
-        `estimate_sig_Callaway and Sant'Anna`, `se_formatted_Callaway and Sant'Anna`
-    )
-
-# Create the final table
-kable(ratio_static_table_wide,
-      col.names = c("Outcome",
-                    "Estimate", "Std. Error",
-                    "Estimate", "Std. Error",
-                    "Estimate", "Std. Error"),
-      caption = "Static Treatment Effects: Quality Ratio Metrics (Impact of Cursor Adoption)",
-      align = c("l", rep("r", 6))) %>%
-    kable_styling(bootstrap_options = c("striped", "hover", "condensed"),
-                  full_width = FALSE,
-                  font_size = 12) %>%
-    add_header_above(c(" " = 1, "TWFE" = 2, "Borusyak et al." = 2, "Callaway and Sant'Anna" = 2)) %>%
-    footnote(general = "Significance levels: *** p<0.001, ** p<0.01, * p<0.05, . p<0.1",
-             general_title = "Note:")
-```
-
-## Dynamic Treatment Effects - Ratio Metrics Only
-
-```{r ratio_dynamic_plot, fig.width=12, fig.height=4}
-# Run dynamic analysis for ratio variables
-ratio_callaway_dynamic <- list()
-ratio_borusyak_dynamic <- list()
-
-for (var in ratio_vars) {
-    ratio_callaway_dynamic[[var]] <- run_callaway(var, panel_data)
-
-    ratio_borusyak_dynamic[[var]] <- did_imputation(
-        data = panel_data,
-        yname = var,
-        gname = "event",
-        tname = "time",
-        idname = "repo_name",
-        first_stage = ~ age + ncloc + contributors + stars + issues | repo_name + time,
-        horizon = -6:6,
-        pretrends = -6:-1
-    )
-}
-
-# Combine all dynamic effects for ratio variables
-ratio_dynamic_effects <- rbind(
-    extract_dynamic_effects(ratio_twfe_results, "Two Way Fixed Effects", ratio_vars),
-    extract_dynamic_effects(ratio_borusyak_dynamic, "Borusyak et al.", ratio_vars),
-    extract_dynamic_effects(ratio_callaway_dynamic, "Callaway and Sant'Anna", ratio_vars)
-)
-
-# Create factor for proper ordering and labeling
-ratio_dynamic_effects$outcome <- factor(ratio_dynamic_effects$outcome,
-                                        levels = ratio_vars,
-                                        labels = ratio_names)
-
-# Add significance indicators for visual styling
-ratio_dynamic_effects <- ratio_dynamic_effects %>%
-    mutate(
-        # Calculate standard error from confidence intervals (approximate)
-        se = (conf.high - conf.low) / (2 * 1.96),
-        # Calculate z-statistic
-        z_stat = estimate / se,
-        # Calculate p-value (two-tailed)
-        p_value = 2 * (1 - pnorm(abs(z_stat))),
-        # Create significance indicator
-        significant = p_value < 0.05,
-        # Create aesthetic variables
-        point_shape = ifelse(significant, 19, 21),  # filled vs hollow circles
-        line_type = ifelse(significant, "solid", "dotted")
-    )
-
-# Create ratio-focused dynamic plot
-ratio_dynamic_plot <- ggplot(ratio_dynamic_effects, aes(x = time, y = estimate, color = method)) +
-    # Add significant points (filled)
-    geom_point(data = filter(ratio_dynamic_effects, significant),
-               position = position_dodge(width = 0.5), size = 2.5, shape = 19) +
-    # Add non-significant points (hollow)
-    geom_point(data = filter(ratio_dynamic_effects, !significant),
-               position = position_dodge(width = 0.5), size = 2.5, shape = 21, fill = "transparent") +
-    # Add error bars for significant effects (solid)
-    geom_errorbar(data = filter(ratio_dynamic_effects, significant),
-                  aes(ymin = conf.low, ymax = conf.high),
-                  position = position_dodge(width = 0.5), width = 0.2, linetype = "solid") +
-    # Add error bars for non-significant effects (dotted)
-    geom_errorbar(data = filter(ratio_dynamic_effects, !significant),
-                  aes(ymin = conf.low, ymax = conf.high),
-                  position = position_dodge(width = 0.5), width = 0.2, linetype = "dotted") +
-    geom_hline(yintercept = 0, linetype = "dashed", color = "red", size = 0.8) +
-    geom_vline(xintercept = 0, linetype = "dashed", color = "blue", size = 0.8) +
-    scale_color_manual(values = c(
-        "Two Way Fixed Effects" = "#CC79A7",
-        "Borusyak et al." = "#009E73",
-        "Callaway and Sant'Anna" = "#0072B2"
-    )) +
-    facet_wrap(~outcome, scales = "free_y", ncol = 3) +
-    scale_x_continuous(limits = c(-6, 6), breaks = -6:6) +
-    labs(
-        title = "Dynamic Treatment Effects: Quality Ratio Metrics",
-        x = "Months Relative to Cursor Adoption",
-        y = "Treatment Effect",
-        color = "Estimator",
-        caption = "Filled points: p < 0.05, Hollow points: p ≥ 0.05"
-    ) +
-    theme_minimal() +
-    theme(
-        legend.position = "bottom",
-        plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
-        strip.text = element_text(size = 12, face = "bold"),
-        axis.title = element_text(size = 11),
-        panel.grid.minor = element_blank()
-    )
-
-print(ratio_dynamic_plot)
-
-ggsave("../plots/ratio_dynamic_effects.pdf",
-  plot = ratio_dynamic_plot, width = 12, height = 4)
+  plot = dynamic_plot, width = 10.5, height = 7.5,
+  device = cairo_pdf)
 ```
