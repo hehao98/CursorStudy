@@ -24,7 +24,7 @@ library(gridExtra)
 ```{r load_data}
 panel_data <- fread("../data/panel_event_monthly.csv")
 
-panel_data <- panel_data[panel_data$commits > 0]
+# panel_data <- panel_data[panel_data$commits > 0]
 
 # Convert variables to DiD required format
 panel_data$repo_name <- as.numeric(factor(panel_data$repo_name))
@@ -61,22 +61,6 @@ glimpse(panel_data)
 ## DiD Analysis with DiD Imputation Package
 
 ```{r did_analysis}
-run_didimputation_analysis <- function(outcome_var, data) {
-    # Run didimputation - the package handles unbalanced panels internally
-    did_result <- did_imputation(
-        data = data,
-        yname = outcome_var,
-        gname = "event",
-        tname = "time",
-        idname = "repo_name",
-        first_stage = ~ age + ncloc + contributors + stars + issues | repo_name + time,
-        horizon = TRUE,
-        pretrends = TRUE
-    )
-
-    return(did_result)
-}
-
 # List of outcome variables
 outcome_vars <- c(
     "commits",
@@ -98,13 +82,6 @@ outcome_names <- c(
     "Duplicated Lines Density",
     "Cognitive Complexity"
 )
-
-# Run DiD for each outcome and store results
-did_results <- list()
-for (var in outcome_vars) {
-    cat("Running analysis for:", var, "\n")
-    did_results[[var]] <- run_didimputation_analysis(var, panel_data)
-}
 ```
 
 ## Aggregate Treatment Effects
@@ -240,4 +217,255 @@ if (length(plot_list) > 0) {
         gridExtra::grid.arrange(grobs = plot_list, ncol = 2)
     }
 }
+```
+
+## Treatment Effect Heterogeneity Analysis
+
+```{r heterogeneity_setup}
+# Create heterogeneity variables
+# 1. Early vs Late Adopters (based on median adoption time)
+median_adoption_time <- median(panel_data$event[panel_data$event > 0])
+panel_data$early_adopter <- ifelse(panel_data$event > 0 & panel_data$event <= median_adoption_time, 1, 0)
+panel_data$late_adopter <- ifelse(panel_data$event > median_adoption_time, 1, 0)
+
+# 2. Young vs Old Projects (based on median project age at treatment)
+# Calculate age at treatment for treated units
+panel_data$age_at_treatment <- ifelse(panel_data$event > 0,
+                                     panel_data$age, NA)
+median_age_at_treatment <- median(panel_data$age_at_treatment[panel_data$event > 0], na.rm = TRUE)
+panel_data$young_project <- ifelse(panel_data$event > 0 & panel_data$age_at_treatment <= median_age_at_treatment, 1, 0)
+panel_data$old_project <- ifelse(panel_data$event > 0 & panel_data$age_at_treatment > median_age_at_treatment, 1, 0)
+
+# 3. Small vs Large Projects (based on median ncloc at treatment)
+panel_data$ncloc_at_treatment <- ifelse(panel_data$event > 0,
+                                       panel_data$ncloc, NA)
+median_ncloc_at_treatment <- median(panel_data$ncloc_at_treatment[panel_data$event > 0], na.rm = TRUE)
+panel_data$small_project <- ifelse(panel_data$event > 0 & panel_data$ncloc_at_treatment <= median_ncloc_at_treatment, 1, 0)
+panel_data$large_project <- ifelse(panel_data$event > 0 & panel_data$ncloc_at_treatment > median_ncloc_at_treatment, 1, 0)
+
+# Print summary statistics
+cat("Heterogeneity Group Summary:\n")
+cat("Early adopters:", sum(panel_data$early_adopter, na.rm = TRUE), "observations\n")
+cat("Late adopters:", sum(panel_data$late_adopter, na.rm = TRUE), "observations\n")
+cat("Young projects:", sum(panel_data$young_project, na.rm = TRUE), "observations\n")
+cat("Old projects:", sum(panel_data$old_project, na.rm = TRUE), "observations\n")
+cat("Small projects:", sum(panel_data$small_project, na.rm = TRUE), "observations\n")
+cat("Large projects:", sum(panel_data$large_project, na.rm = TRUE), "observations\n")
+```
+
+```{r heterogeneity_analysis}
+# Function to run DiD analysis for a specific subgroup
+run_subgroup_did <- function(outcome_var, data, subgroup_var) {
+    # Filter data to include only the specific subgroup and control group
+    subgroup_data <- data[data[[subgroup_var]] == 1 | data$treated == 0, ]
+
+    if (nrow(subgroup_data) < 50) {
+        return(NULL)  # Skip if too few observations
+    }
+
+    # Create new treatment indicator for this subgroup
+    subgroup_data$subgroup_treated <- ifelse(subgroup_data[[subgroup_var]] == 1, 1, 0)
+
+    # Run DiD analysis
+    tryCatch({
+        did_result <- did_imputation(
+            data = subgroup_data,
+            yname = outcome_var,
+            gname = "event",
+            tname = "time",
+            idname = "repo_name",
+            first_stage = ~ age + ncloc + contributors + stars + issues | repo_name + time
+        )
+        return(did_result)
+    }, error = function(e) {
+        cat("Error in subgroup analysis for", outcome_var, ":", e$message, "\n")
+        return(NULL)
+    })
+}
+
+# Function to extract treatment effect from DiD result
+extract_treatment_effect <- function(did_result) {
+    if (is.null(did_result)) return(list(estimate = NA, se = NA, p_value = NA))
+
+    treat_row <- did_result[did_result$term == "treat", ]
+    if (nrow(treat_row) == 0) return(list(estimate = NA, se = NA, p_value = NA))
+
+    return(list(
+        estimate = treat_row$estimate,
+        se = treat_row$std.error,
+        p_value = treat_row$p.value
+    ))
+}
+
+# Function to perform difference test between two subgroups
+difference_test <- function(est1, se1, est2, se2) {
+    if (is.na(est1) || is.na(est2) || is.na(se1) || is.na(se2)) {
+        return(list(diff = NA, se_diff = NA, t_stat = NA, p_value = NA))
+    }
+
+    diff <- est1 - est2
+    se_diff <- sqrt(se1^2 + se2^2)
+    t_stat <- diff / se_diff
+    p_value <- 2 * (1 - pnorm(abs(t_stat)))
+
+    return(list(diff = diff, se_diff = se_diff, t_stat = t_stat, p_value = p_value))
+}
+
+# Function to calculate effect size (Cohen's d)
+effect_size <- function(est1, est2, se1, se2) {
+    if (is.na(est1) || is.na(est2) || is.na(se1) || is.na(se2)) {
+        return(NA)
+    }
+
+    # Pooled standard error
+    pooled_se <- sqrt((se1^2 + se2^2) / 2)
+    cohens_d <- (est1 - est2) / pooled_se
+
+    return(cohens_d)
+}
+
+# Define heterogeneity groups
+heterogeneity_groups <- list(
+    list(name = "Early vs Late Adopters",
+         group1 = "early_adopter", group2 = "late_adopter"),
+    list(name = "Young vs Old Projects",
+         group1 = "young_project", group2 = "old_project"),
+    list(name = "Small vs Large Projects",
+         group1 = "small_project", group2 = "large_project")
+)
+
+# Run heterogeneity analysis for each group and outcome
+heterogeneity_results <- list()
+
+for (group_info in heterogeneity_groups) {
+    group_name <- group_info$name
+    group1_var <- group_info$group1
+    group2_var <- group_info$group2
+
+    cat("\n=== Analysis for", group_name, "===\n")
+
+    group_results <- list()
+
+    for (i in seq_along(outcome_vars)) {
+        outcome_var <- outcome_vars[i]
+        outcome_name <- outcome_names[i]
+
+        cat("Running analysis for:", outcome_name, "\n")
+
+        # Run DiD for both subgroups
+        result1 <- run_subgroup_did(outcome_var, panel_data, group1_var)
+        result2 <- run_subgroup_did(outcome_var, panel_data, group2_var)
+
+        # Extract treatment effects
+        effect1 <- extract_treatment_effect(result1)
+        effect2 <- extract_treatment_effect(result2)
+
+        # Perform difference test
+        diff_test <- difference_test(effect1$estimate, effect1$se,
+                                   effect2$estimate, effect2$se)
+
+        # Calculate effect size
+        cohens_d <- effect_size(effect1$estimate, effect2$estimate,
+                               effect1$se, effect2$se)
+
+        # Store results
+        group_results[[outcome_name]] <- list(
+            group1_estimate = effect1$estimate,
+            group1_se = effect1$se,
+            group1_pvalue = effect1$p_value,
+            group2_estimate = effect2$estimate,
+            group2_se = effect2$se,
+            group2_pvalue = effect2$p_value,
+            difference = diff_test$diff,
+            diff_se = diff_test$se_diff,
+            diff_tstat = diff_test$t_stat,
+            diff_pvalue = diff_test$p_value,
+            cohens_d = cohens_d
+        )
+    }
+
+    heterogeneity_results[[group_name]] <- group_results
+}
+```
+
+```{r heterogeneity_summary}
+# Create summary tables for each heterogeneity dimension
+create_heterogeneity_table <- function(group_name, group_results) {
+    # Check if group_results is empty or NULL
+    if (is.null(group_results) || length(group_results) == 0) {
+        cat("No results available for", group_name, "\n")
+        return(NULL)
+    }
+
+    # Extract data for table
+    outcomes <- names(group_results)
+
+    # Check if we have valid outcomes
+    if (length(outcomes) == 0) {
+        cat("No valid outcomes for", group_name, "\n")
+        return(NULL)
+    }
+
+    # Safely extract values with error handling
+    safe_extract <- function(field) {
+        sapply(group_results, function(x) {
+            if (is.null(x) || is.null(x[[field]])) NA else x[[field]]
+        })
+    }
+
+    table_data <- data.frame(
+        Outcome = outcomes,
+        Group1_Estimate = safe_extract("group1_estimate"),
+        Group1_SE = safe_extract("group1_se"),
+        Group1_PValue = safe_extract("group1_pvalue"),
+        Group2_Estimate = safe_extract("group2_estimate"),
+        Group2_SE = safe_extract("group2_se"),
+        Group2_PValue = safe_extract("group2_pvalue"),
+        Difference = safe_extract("difference"),
+        Diff_SE = safe_extract("diff_se"),
+        Diff_PValue = safe_extract("diff_pvalue"),
+        Cohens_D = safe_extract("cohens_d")
+    )
+
+    # Add significance indicators
+    table_data$Group1_Sig <- ifelse(table_data$Group1_PValue < 0.05, "*", "")
+    table_data$Group2_Sig <- ifelse(table_data$Group2_PValue < 0.05, "*", "")
+    table_data$Diff_Sig <- ifelse(table_data$Diff_PValue < 0.05, "*", "")
+
+    return(table_data)
+}
+
+# Combine all heterogeneity results into one large table
+combined_table_data <- data.frame()
+
+for (group_name in names(heterogeneity_results)) {
+    table_data <- create_heterogeneity_table(group_name, heterogeneity_results[[group_name]])
+
+    # Check if table_data is valid
+    if (is.null(table_data) || nrow(table_data) == 0) {
+        cat("No valid data available for", group_name, "\n")
+        next
+    }
+
+    # Add dimension column
+    table_data$Heterogeneity_Dimension <- group_name
+
+    # Add to combined table
+    combined_table_data <- rbind(combined_table_data, table_data)
+}
+
+display_table <- combined_table_data[, c("Heterogeneity_Dimension", "Outcome",
+                                        "Group1_Estimate", "Group1_SE", "Group1_Sig",
+                                        "Group2_Estimate", "Group2_SE", "Group2_Sig",
+                                        "Difference", "Diff_SE", "Diff_PValue", "Diff_Sig", "Cohens_D")]
+
+# Rename columns for better readability
+colnames(display_table) <- c("Dimension", "Outcome", "Group1_Est", "Group1_SE", "Group1_Sig",
+                            "Group2_Est", "Group2_SE", "Group2_Sig",
+                            "Difference", "Diff_SE", "Diff_PValue", "Diff_Sig", "Cohen's d")
+
+# Display combined table
+knitr::kable(display_table,
+                digits = 3,
+                caption = "Treatment Effect Heterogeneity by Outcome Variable and Group")
 ```

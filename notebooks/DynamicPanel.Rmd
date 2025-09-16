@@ -30,19 +30,18 @@ dynamic_data <- panel_data %>%
     mutate(time_date = as.Date(paste0(time, "-01"))) %>%
     arrange(repo_name, time_date) %>%
     group_by(repo_name) %>%
-    mutate(
-        delta_code_smells = code_smells - lag(code_smells),
-        delta_bugs = bugs - lag(bugs),
-    ) %>%
     ungroup() %>%
-    # Remove rows where delta_code_smells or delta_bugs are NA
-    filter(!is.na(delta_code_smells) &
-        !is.na(delta_bugs) & !is.na(cognitive_complexity) &
+    # Remove control groups
+    # filter(is_treatment == 1) %>%
+    # Remove rows where code_smells or bugs are NA
+    filter(!is.na(code_smells) &
+        !is.na(bugs) & !is.na(cognitive_complexity) &
         !is.na(lines_added) & !is.na(commits)) %>%
     mutate(
         id = as.factor(repo_name),
         time = as.numeric(factor(time_date))
-    )
+    ) %>%
+    distinct(repo_name, time_date, .keep_all = TRUE)
 
 pdyn <- pdata.frame(dynamic_data, index = c("id", "time"))
 
@@ -52,46 +51,57 @@ pdyn <- pdyn %>%
         commits = log(commits + 1),
         lines_added = log(lines_added + 1),
         cognitive_complexity = log(cognitive_complexity + 1),
-        delta_code_smells = log(delta_code_smells + 1),
-        delta_bugs = log(delta_bugs + 1)
+        code_smells = log(code_smells + 1),
+        bugs = log(bugs + 1)
     )
 
 glimpse(pdyn)
 ```
 
+## Correlation Analysis
+
+```{r correlations}
+# Print correlations between code quality metrics
+cor_matrix <- pdyn %>%
+    select(cognitive_complexity, code_smells, bugs) %>%
+    cor(use = "complete.obs")
+
+print("Correlation Matrix for Code Quality Metrics:")
+print(round(cor_matrix, 3))
+```
+
 ## Fitting Dynamic Panel Model using GMM
 
 ```{r dynamic_model_lines_added}
-dynamic_model <- pgmm(
+dynamic_model_lines <- pgmm(
     formula = lines_added ~ lag(lines_added, 1) + lag(lines_added, 2) + lag(cognitive_complexity, 1) +
-        lag(code_smells, 1) + lag(bugs, 1) + post_event +
+        post_event +
         log(ncloc + 1) + log(age + 1) + log(contributors + 1) + log(stars + 1) +
         log(issues + 1) |
         lag(lines_added, 3:6),
     data = pdyn,
-    effect = "individual",
+    effect = "twoways",
     model = "onestep",
     transformation = "d",
     collapse = TRUE
 )
 
-summary(dynamic_model)
+summary(dynamic_model_lines)
 ```
 
-
 ```{r dynamic_model_commits}
-dynamic_model <- pgmm(
+dynamic_model_commits <- pgmm(
     formula = commits ~ lag(commits, 1) + lag(commits, 2) + lag(cognitive_complexity, 1) +
-        lag(code_smells, 1) + lag(bugs, 1) + post_event +
+        post_event +
         log(ncloc + 1) + log(age + 1) + log(contributors + 1) + log(stars + 1) +
         log(issues + 1) |
         lag(commits, 3:6),
     data = pdyn,
-    effect = "individual",
+    effect = "twoways",
     model = "onestep",
     transformation = "d",
     collapse = TRUE
 )
 
-summary(dynamic_model)
+summary(dynamic_model_commits)
 ```
