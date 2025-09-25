@@ -345,7 +345,7 @@ kable(static_table_wide,
 
 ## Dynamic Treatment Effects (Event Study) Comparison
 
-```{r dynamic_effects, fig.width=10.5, fig.height=7.5}
+```{r dynamic_effects, fig.width=10.5, fig.height=5}
 # Extract dynamic effects from each method
 extract_dynamic_effects <- function(results, method_name, variables = NULL) {
     effects_list <- list()
@@ -356,7 +356,7 @@ extract_dynamic_effects <- function(results, method_name, variables = NULL) {
     for (var in vars_to_use) {
         if (method_name == "Callaway and Sant'Anna") {
             dynamic_effects <- aggte(results[[var]], type = "dynamic", min_e = -6, max_e = 6)
-            effects_list[[var]] <- data.frame(
+            df <- data.frame(
                 outcome = var,
                 method = method_name,
                 time = dynamic_effects$egt,
@@ -364,10 +364,13 @@ extract_dynamic_effects <- function(results, method_name, variables = NULL) {
                 conf.low = dynamic_effects$att.egt - 1.96 * dynamic_effects$se.egt,
                 conf.high = dynamic_effects$att.egt + 1.96 * dynamic_effects$se.egt
             )
+            # Drop event-time -1 to avoid anticipation period
+            df <- df[df$time != -1, , drop = FALSE]
+            effects_list[[var]] <- df
         } else if (method_name == "Borusyak et al.") {
             result <- results[[var]]
             dynamic_data <- result[result$term != "treat", ]
-            effects_list[[var]] <- data.frame(
+            df <- data.frame(
                 outcome = var,
                 method = method_name,
                 time = as.numeric(dynamic_data$term),
@@ -375,6 +378,9 @@ extract_dynamic_effects <- function(results, method_name, variables = NULL) {
                 conf.low = dynamic_data$conf.low,
                 conf.high = dynamic_data$conf.high
             )
+            # Drop event-time -1 to avoid anticipation period
+            df <- df[df$time != -1, , drop = FALSE]
+            effects_list[[var]] <- df
         } else if (method_name == "Two Way Fixed Effects") {
             # Run event study for TWFE
             formula_str <- paste0(
@@ -430,7 +436,7 @@ for (var in outcome_vars) {
         idname = "repo_name",
         first_stage = ~ age + ncloc + contributors + stars + issues | repo_name + time,
         horizon = -6:6,
-        pretrends = -6:-1
+        pretrends = -6:-2
     )
 }
 
@@ -462,20 +468,28 @@ dynamic_effects <- dynamic_effects %>%
         line_type = ifelse(significant, "solid", "dotted")
     )
 
-# Create comparison plot with significance-based styling
-dynamic_plot <- ggplot(dynamic_effects, aes(x = time, y = estimate, color = method)) +
+# Split outcomes: top panels vs last row (last 3 outcomes)
+outcome_levels <- levels(dynamic_effects$outcome)
+top_levels <- outcome_levels[seq_len(length(outcome_levels) - 3)]
+last_levels <- tail(outcome_levels, 3)
+
+dynamic_effects_top <- dynamic_effects %>% filter(outcome %in% top_levels)
+dynamic_effects_last <- dynamic_effects %>% filter(outcome %in% last_levels)
+
+# Create comparison plot (top panels)
+dynamic_plot <- ggplot(dynamic_effects_top, aes(x = time, y = estimate, color = method)) +
     # Add significant points (filled)
-    geom_point(data = filter(dynamic_effects, significant),
+    geom_point(data = filter(dynamic_effects_top, significant),
                position = position_dodge(width = 0.5), size = 2, shape = 19) +
     # Add non-significant points (hollow)
-    geom_point(data = filter(dynamic_effects, !significant),
+    geom_point(data = filter(dynamic_effects_top, !significant),
                position = position_dodge(width = 0.5), size = 2, shape = 21, fill = "transparent") +
     # Add error bars for significant effects (solid)
-    geom_errorbar(data = filter(dynamic_effects, significant),
+    geom_errorbar(data = filter(dynamic_effects_top, significant),
                   aes(ymin = conf.low, ymax = conf.high),
                   position = position_dodge(width = 0.5), width = 0, linetype = "solid") +
     # Add error bars for non-significant effects (dotted)
-    geom_errorbar(data = filter(dynamic_effects, !significant),
+    geom_errorbar(data = filter(dynamic_effects_top, !significant),
                   aes(ymin = conf.low, ymax = conf.high),
                   position = position_dodge(width = 0.5), width = 0, linetype = "dotted") +
     geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
@@ -503,7 +517,49 @@ dynamic_plot <- ggplot(dynamic_effects, aes(x = time, y = estimate, color = meth
 print(dynamic_plot)
 
 ggsave("../plots/dynamic_effects.pdf",
-  plot = dynamic_plot, width = 10.5, height = 7.5,
+  plot = dynamic_plot, width = 10.5, height = 5,
+  device = cairo_pdf, family = "DejaVu Sans")
+```
+
+```{r dynamic_effects_lastrow, fig.width=7.5, fig.height=3}
+# Standalone figure for the last row (last 3 outcomes)
+dynamic_plot_last <- ggplot(dynamic_effects_last, aes(x = time, y = estimate, color = method)) +
+    geom_point(data = filter(dynamic_effects_last, significant),
+               position = position_dodge(width = 0.5), size = 2, shape = 19) +
+    geom_point(data = filter(dynamic_effects_last, !significant),
+               position = position_dodge(width = 0.5), size = 2, shape = 21, fill = "transparent") +
+    geom_errorbar(data = filter(dynamic_effects_last, significant),
+                  aes(ymin = conf.low, ymax = conf.high),
+                  position = position_dodge(width = 0.5), width = 0, linetype = "solid") +
+    geom_errorbar(data = filter(dynamic_effects_last, !significant),
+                  aes(ymin = conf.low, ymax = conf.high),
+                  position = position_dodge(width = 0.5), width = 0, linetype = "dotted") +
+    geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+    geom_vline(xintercept = 0, linetype = "dashed", color = "blue") +
+    scale_color_manual(values = c(
+        "Two Way Fixed Effects" = "#CC79A7",
+        "Borusyak et al." = "#009E73",
+        "Callaway and Sant'Anna" = "#0072B2"
+    )) +
+    facet_wrap(~outcome, scales = "free_y", ncol = 3) +
+    scale_x_continuous(limits = c(-6, 6), breaks = -6:6) +
+    labs(
+        x = "Months Relative to Cursor Adoption",
+        y = "Treatment Effect",
+        color = "Estimator",
+        caption = "Filled dots: p < 0.05 (significant), Hollow dots: p ≥ 0.05 (non-significant)"
+    ) +
+    theme_minimal() +
+    theme(
+        legend.position = "bottom",
+        plot.caption = element_text(hjust = 0.5, size = 10, margin = margin(t = 10)),
+        legend.margin = margin(b = 5)
+    )
+
+print(dynamic_plot_last)
+
+ggsave("../plots/dynamic_effects_lastrow.pdf",
+  plot = dynamic_plot_last, width = 7.5, height = 3.0,
   device = cairo_pdf, family = "DejaVu Sans")
 ```
 
