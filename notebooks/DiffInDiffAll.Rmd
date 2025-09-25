@@ -19,6 +19,7 @@ library(data.table)
 library(gridExtra)
 library(knitr)
 library(kableExtra)
+library(tibble)
 ```
 
 ## Loading and Preparing the Data
@@ -503,5 +504,149 @@ print(dynamic_plot)
 
 ggsave("../plots/dynamic_effects.pdf",
   plot = dynamic_plot, width = 10.5, height = 7.5,
-  device = cairo_pdf)
+  device = cairo_pdf, family = "DejaVu Sans")
+```
+
+## Pre-Trend Tests (Heteroskedasticity- and Cluster-Robust Wald)
+
+```{r pretrend_tests}
+# Helper: compute Wald test given estimates and a variance-covariance matrix
+compute_wald <- function(beta_vec, vcov_mat) {
+    # Drop any NA coefficients
+    valid <- which(!is.na(beta_vec))
+    beta <- as.numeric(beta_vec[valid])
+    V <- as.matrix(vcov_mat[valid, valid, drop = FALSE])
+
+    if (length(beta) == 0) {
+        return(list(stat = NA_real_, df = 0L, p_value = NA_real_))
+    }
+
+    # Try inversion; fall back to generalized inverse if singular
+    stat <- tryCatch({
+        as.numeric(t(beta) %*% solve(V, beta))
+    }, error = function(e) {
+        as.numeric(t(beta) %*% MASS::ginv(V) %*% beta)
+    })
+
+    df <- length(beta)
+    p_value <- 1 - pchisq(stat, df = df)
+    list(stat = stat, df = df, p_value = p_value)
+}
+
+# TWFE: fit event-study with leads/lags and test all leads == 0
+twfe_pretrend_test <- function(outcome_var, data) {
+    formula_str <- paste0(
+        outcome_var, " ~ lead_6 + lead_5 + lead_4 + lead_3 + lead_2 + ",
+        "lag_0 + lag_1 + lag_2 + lag_3 + lag_4 + lag_5 + lag_6 + ",
+        "age + ncloc + contributors + stars + issues | repo_name_fac + time_fac"
+    )
+    model <- feols(as.formula(formula_str), data = data)
+
+    coefs <- coef(model)
+    lead_names <- names(coefs)[grepl("^lead_", names(coefs))]
+    beta <- coefs[lead_names]
+    V_full <- vcov(model, cluster = ~ repo_name_fac)
+    V <- V_full[lead_names, lead_names, drop = FALSE]
+
+    res <- compute_wald(beta, V)
+    tibble::tibble(
+        method = "Two Way Fixed Effects",
+        outcome = outcome_var,
+        num_pre = length(beta),
+        stat = res$stat,
+        df = res$df,
+        p_value = res$p_value
+    )
+}
+
+# Callaway & Sant'Anna: use dynamic AGGTE; prefer full covariance if available
+callaway_pretrend_test <- function(attgt_obj) {
+    dyn <- aggte(attgt_obj, type = "dynamic", min_e = -6, max_e = 6)
+    pre_idx <- which(dyn$egt < 0)
+    beta <- dyn$att.egt[pre_idx]
+
+    # Try to use provided covariance across event-times if available
+    V_egt <- NULL
+    if (!is.null(dyn$V_egt)) V_egt <- dyn$V_egt
+    if (is.null(V_egt) && !is.null(dyn$V.egt)) V_egt <- dyn$V.egt
+
+    if (!is.null(V_egt)) {
+        V <- as.matrix(V_egt[pre_idx, pre_idx, drop = FALSE])
+    } else {
+        V <- diag((dyn$se.egt[pre_idx])^2, nrow = length(pre_idx))
+    }
+
+    res <- compute_wald(beta, V)
+    tibble::tibble(
+        method = "Callaway and Sant'Anna",
+        num_pre = length(beta),
+        stat = res$stat,
+        df = res$df,
+        p_value = res$p_value
+    )
+}
+
+# Borusyak et al.: use horizon results; build diagonal V from robust SEs
+borusyak_pretrend_test <- function(bjs_dyn_df) {
+    dyn_df <- bjs_dyn_df[bjs_dyn_df$term != "treat", ]
+    dyn_df$time_num <- suppressWarnings(as.numeric(dyn_df$term))
+    pre_df <- dyn_df[!is.na(dyn_df$time_num) & dyn_df$time_num < 0, ]
+    beta <- pre_df$estimate
+
+    if ("std.error" %in% names(pre_df)) {
+        se <- pre_df$std.error
+    } else if (all(c("conf.low", "conf.high") %in% names(pre_df))) {
+        se <- (pre_df$conf.high - pre_df$conf.low) / (2 * 1.96)
+    } else {
+        stop("Standard errors not found in did_imputation output.")
+    }
+
+    V <- diag(se^2, nrow = length(se))
+    res <- compute_wald(beta, V)
+    tibble::tibble(
+        method = "Borusyak et al.",
+        num_pre = length(beta),
+        stat = res$stat,
+        df = res$df,
+        p_value = res$p_value
+    )
+}
+
+# Run tests for all outcomes and methods
+pretrend_results <- list()
+
+for (var in outcome_vars) {
+    # TWFE
+    pretrend_results[[paste0(var, "_TWFE")]] <- twfe_pretrend_test(var, panel_data)
+    pretrend_results[[paste0(var, "_TWFE")]]$outcome <- var
+
+    # Callaway
+    ct <- callaway_pretrend_test(callaway_results[[var]])
+    ct$outcome <- var
+    pretrend_results[[paste0(var, "_Callaway")]] <- ct
+
+    # Borusyak
+    bt <- borusyak_pretrend_test(borusyak_dynamic[[var]])
+    bt$outcome <- var
+    pretrend_results[[paste0(var, "_BJS")]] <- bt
+}
+
+pretrend_table <- bind_rows(pretrend_results) %>%
+    mutate(
+        outcome = factor(outcome, levels = outcome_vars, labels = outcome_names),
+        p_value = as.numeric(p_value),
+        stat = as.numeric(stat),
+        decision_5pct = ifelse(!is.na(p_value) & p_value < 0.05, "Reject H0", "Fail to Reject")
+    ) %>%
+    arrange(outcome, method) %>%
+    select(outcome, method, num_pre, df, stat, p_value, decision_5pct)
+
+kable(pretrend_table,
+      col.names = c("Outcome", "Estimator", "# Pre-Periods", "df",
+                    "Chi-square", "p-value", "Decision (5%)"),
+      caption = "Pre-Trend Tests (Heteroskedasticity- & Cluster-Robust Wald)",
+      digits = c(NA, NA, 0, 0, 3, 3, NA),
+      align = c("l", "l", rep("r", 4), "l")) %>%
+    kable_styling(bootstrap_options = c("striped", "hover", "condensed"),
+                  full_width = FALSE, font_size = 12)
 ```
