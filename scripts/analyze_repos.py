@@ -204,6 +204,32 @@ def get_commit_stats(
         return None, None
 
 
+def _is_cursor_related_path(path: Optional[str]) -> bool:
+    """Return True if path is a cursor rules/ignore file or inside .cursor."""
+    if not path:
+        return False
+    try:
+        name = Path(path).name
+    except Exception:
+        name = path
+
+    if name in {".cursorrules", ".cursorignore"}:
+        return True
+
+    try:
+        parts = set(Path(path).parts)
+    except Exception:
+        parts = set(path.split("/"))
+
+    if ".cursor" in parts:
+        return True
+
+    if path.startswith(".cursor/") or "/.cursor/" in path:
+        return True
+
+    return False
+
+
 def find_cursor_commits(repo_path: Path) -> List[Dict]:
     """
     Scan all commits in a repository to check for .cursorrules files or cursor/ directories.
@@ -215,7 +241,7 @@ def find_cursor_commits(repo_path: Path) -> List[Dict]:
         List of dictionaries containing commit information for commits that contain
             .cursorrules files or cursor/ directories
     """
-    commits_data = []
+    commits_data: List[Dict] = []
 
     try:
         repo = git.Repo(str(repo_path))
@@ -234,37 +260,39 @@ def find_cursor_commits(repo_path: Path) -> List[Dict]:
             commit_time = datetime.fromtimestamp(commit.committed_date)
             author_date = datetime.fromtimestamp(commit.authored_date)
 
-            # Check if this commit contains .cursorrules or cursor/ directory
-            has_cursor_files = False
+            changed_paths: List[str] = []
 
             try:
-                # Get the tree for this commit
-                tree = commit.tree
+                if commit.parents:
+                    parent = commit.parents[0]
+                    diffs = commit.diff(parent)
+                else:
+                    diffs = commit.diff(git.NULL_TREE)
 
-                # Check for Cursor related files
-                if (
-                    ".cursorrules" in tree
-                    or ".cursor" in tree
-                    or ".cursorignore" in tree
-                ):
-                    has_cursor_files = True
-
+                for d in diffs:
+                    a_path = getattr(d, "a_path", None)
+                    b_path = getattr(d, "b_path", None)
+                    if _is_cursor_related_path(a_path):
+                        changed_paths.append(a_path)  # type: ignore[arg-type]
+                    if _is_cursor_related_path(b_path):
+                        changed_paths.append(b_path)  # type: ignore[arg-type]
             except Exception as e:
-                logging.debug(
-                    "Could not check tree for commit %s: %s", commit.hexsha, e
-                )
+                logging.debug("Could not diff commit %s: %s", commit.hexsha, e)
                 continue
 
-            if has_cursor_files:
+            if changed_paths:
+                unique_paths = sorted(set(changed_paths))
                 commits_data.append(
                     {
                         "repo_name": repo_name,
                         "commit_hash": commit.hexsha,
-                        "author": f"{commit.author.name} <{commit.author.email}>",
+                        "author": "%s <%s>" % (commit.author.name, commit.author.email),
                         "authored_at": author_date.isoformat(),
-                        "committer": f"{commit.committer.name} <{commit.committer.email}>",
+                        "committer": "%s <%s>"
+                        % (commit.committer.name, commit.committer.email),
                         "committed_at": commit_time.isoformat(),
                         "message": commit.message.split("\n")[0],
+                        "paths": ";".join(unique_paths),
                     }
                 )
 
@@ -302,7 +330,7 @@ def process_repository(
     repo: Dict,
     total_repos: int,
     aggregation: str,
-) -> Tuple[List[Dict], List[Dict]]:
+) -> Tuple[List[Dict], List[Dict], List[Dict]]:
     """
     Process a single repository in a worker process.
 
@@ -320,11 +348,12 @@ def process_repository(
     """
     repo_name = repo["repo_name"]
     repo_path = CLONE_DIR / repo_name.replace("/", "_")
-    repo_ts = []
-    contributor_ts = []
+    repo_ts: List[Dict] = []
+    contributor_ts: List[Dict] = []
+    cursor_commits: List[Dict] = []
 
     if not repo_path.exists():
-        return repo_ts, contributor_ts
+        return repo_ts, contributor_ts, cursor_commits
 
     logging.info("Analyzing repository: %s (%d/%d)", repo_name, idx + 1, total_repos)
 
@@ -352,7 +381,7 @@ def process_repository(
     if contributor_stats:
         contributor_ts.extend(contributor_stats)
 
-    return repo_ts, contributor_ts
+    return repo_ts, contributor_ts, cursor_commits
 
 
 def main() -> None:
@@ -394,8 +423,9 @@ def main() -> None:
     ]
     random.shuffle(args_list)
 
-    repo_ts = []
-    contributor_ts = []
+    repo_ts: List[Dict] = []
+    contributor_ts: List[Dict] = []
+    all_cursor_commits: List[Dict] = []
 
     logging.info("Starting multiprocessing pool with %d workers", NUM_PROCESSES)
     with multiprocessing.Pool(processes=NUM_PROCESSES) as pool:
@@ -409,9 +439,11 @@ def main() -> None:
                 (
                     repo_time_series,
                     repo_contributor_ts,
+                    repo_cursor_commits,
                 ) = async_result.get(timeout=REPO_TIMEOUT_SECONDS)
                 repo_ts.extend(repo_time_series)
                 contributor_ts.extend(repo_contributor_ts)
+                all_cursor_commits.extend(repo_cursor_commits)
             except multiprocessing.TimeoutError:
                 logging.error(
                     "Repository %s processing timed out after %d seconds",
@@ -437,6 +469,11 @@ def main() -> None:
         contributor_df = pd.DataFrame(contributor_ts)
         contributor_df.to_csv(contributor_output, index=False)
         logging.info("Saved contributor time series data to %s", contributor_output)
+
+    if all_cursor_commits:
+        commits_df = pd.DataFrame(all_cursor_commits)
+        commits_df.to_csv(CURSOR_COMMITS_CSV, index=False)
+        logging.info("Saved cursor commit data to %s", CURSOR_COMMITS_CSV)
 
 
 if __name__ == "__main__":

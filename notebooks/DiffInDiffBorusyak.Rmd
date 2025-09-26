@@ -28,7 +28,12 @@ library(gridExtra)
 ```{r load_data}
 panel_data <- fread("../data/panel_event_monthly.csv")
 
+# Load repo metrics data for cursor adoption percentages
+repo_metrics <- fread("../data/repo_metrics.csv")
+
 # Convert variables to DiD required format
+# Keep original repo names (strings) for mapping
+panel_data$repo_name_str <- panel_data$repo_name
 panel_data$repo_name <- as.numeric(factor(panel_data$repo_name))
 panel_data$time <- as.numeric(gsub("-", "", panel_data$time))
 panel_data$event[!is.na(panel_data$event)] <- as.numeric(
@@ -58,6 +63,9 @@ panel_data$treated <- ifelse(panel_data$event > 0, 1, 0)
 panel_data$time_since_treatment <- ifelse(panel_data$treated == 1,
                                          panel_data$time - panel_data$event,
                                          NA)
+
+# Build simple mapping: repo_name -> cursor adoption %
+adoption_pct <- setNames(repo_metrics$cursor_adoptor_percentage, repo_metrics$repo_name)
 
 glimpse(panel_data)
 ```
@@ -223,7 +231,7 @@ if (length(plot_list) > 0) {
 }
 ```
 
-## Compare Event Studies Across Four Settings
+## Compare Event Studies Across Five Settings
 
 ```{r compare_event_study, fig.width=12, fig.height=5}
 # Build filtered variants directly from the already prepared `panel_data`
@@ -238,6 +246,12 @@ build_setting_variant <- function(data, setting_label) {
     } else if (setting_label == "Truncated to 2025-06") {
         # `time` is numeric YYYYMM after preprocessing (e.g., 202506)
         dt <- dt[dt$time <= 202506, ]
+    } else if (setting_label == "High Adoption (>=80%)") {
+        # Only include treated repos with >=80% cursor adoption + never treated (control group)
+        # Lookup using simple mapping from original repo_name strings
+        adoption_vec <- adoption_pct[dt$repo_name_str]
+        adoption_vec[is.na(adoption_vec)] <- 0
+        dt <- dt[dt$treated == 0 | (dt$treated == 1 & adoption_vec >= 80), ]
     }
     dt
 }
@@ -246,7 +260,8 @@ settings <- c(
     "Orginal",
     "Active Months (>0 commits)",
     "Very Active (>=10 commits)",
-    "Truncated to 2025-06"
+    "Truncated to 2025-06",
+    "High Adoption (>=80%)"
 )
 
 # Run dynamic DiD for each outcome and each setting, collect results
@@ -287,20 +302,43 @@ plot_dyn$outcome_label <- factor(plot_dyn$outcome_label, levels = outcome_names)
 # Keep legend order consistent with settings vector
 plot_dyn$setting <- factor(plot_dyn$setting, levels = settings)
 
-# Overlayed event study by setting, faceted by outcome
+# Add significance indicator (CI not crossing 0 implies ~ p < 0.05)
+plot_dyn$significant <- (plot_dyn$conf.low > 0) | (plot_dyn$conf.high < 0)
+
+# Overlayed event study by setting, faceted by outcome (styled like DiffInDiffAll.Rmd)
 ggplot(plot_dyn, aes(x = time, y = estimate, color = setting)) +
-    geom_point(size = 1.8) +
-    geom_line() +
-    geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.15, alpha = 0.5) +
+    # Significant points (filled)
+    geom_point(data = subset(plot_dyn, significant),
+               size = 2, shape = 19) +
+    # Non-significant points (hollow)
+    geom_point(data = subset(plot_dyn, !significant),
+               size = 2, shape = 21, fill = "transparent") +
+    # Error bars for significant effects (solid)
+    geom_errorbar(data = subset(plot_dyn, significant),
+                  aes(ymin = conf.low, ymax = conf.high),
+                  width = 0, linetype = "solid") +
+    # Error bars for non-significant effects (dotted)
+    geom_errorbar(data = subset(plot_dyn, !significant),
+                  aes(ymin = conf.low, ymax = conf.high),
+                  width = 0, linetype = "dotted") +
     geom_hline(yintercept = 0, linetype = "dashed") +
     geom_vline(xintercept = 0, linetype = "dashed") +
     scale_x_continuous(limits = c(-6, 6), breaks = -6:6) +
     labs(
-        title = "Event Study: Comparison Across Four Settings",
         x = "Months Relative to Cursor Adoption",
         y = "Treatment Effect",
-        color = "Setting"
+        color = "Setting",
+        caption = "Filled dots: p < 0.05 (significant), Hollow dots: p ≥ 0.05 (non-significant)"
     ) +
     theme_minimal() +
+    theme(
+        legend.position = "bottom",
+        plot.caption = element_text(hjust = 0.5, size = 10, margin = margin(t = 10)),
+        legend.margin = margin(b = 5)
+    ) +
     facet_wrap(~ outcome_label, scales = "free_y", nrow = 2, ncol = 4)
+
+ggsave("../plots/dynamic_effects_comparison.pdf",
+  plot = dynamic_plot, width = 10.5, height = 5,
+  device = cairo_pdf, family = "DejaVu Sans")
 ```
