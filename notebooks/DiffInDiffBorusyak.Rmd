@@ -233,7 +233,7 @@ if (length(plot_list) > 0) {
 
 ## Compare Event Studies Across Five Settings
 
-```{r compare_event_study, fig.width=12, fig.height=5}
+```{r compare_event_study, fig.width=10.5, fig.height=5}
 # Build filtered variants directly from the already prepared `panel_data`
 build_setting_variant <- function(data, setting_label) {
     dt <- data
@@ -306,20 +306,22 @@ plot_dyn$setting <- factor(plot_dyn$setting, levels = settings)
 plot_dyn$significant <- (plot_dyn$conf.low > 0) | (plot_dyn$conf.high < 0)
 
 # Overlayed event study by setting, faceted by outcome (styled like DiffInDiffAll.Rmd)
-ggplot(plot_dyn, aes(x = time, y = estimate, color = setting)) +
+dynamic_plot <- ggplot(plot_dyn, aes(x = time, y = estimate, color = setting)) +
     # Significant points (filled)
     geom_point(data = subset(plot_dyn, significant),
-               size = 2, shape = 19) +
+               position = position_dodge(width = 0.5), size = 2, shape = 19) +
     # Non-significant points (hollow)
     geom_point(data = subset(plot_dyn, !significant),
-               size = 2, shape = 21, fill = "transparent") +
+               position = position_dodge(width = 0.5), size = 2, shape = 21, fill = "transparent") +
     # Error bars for significant effects (solid)
     geom_errorbar(data = subset(plot_dyn, significant),
                   aes(ymin = conf.low, ymax = conf.high),
+                  position = position_dodge(width = 0.5),
                   width = 0, linetype = "solid") +
     # Error bars for non-significant effects (dotted)
     geom_errorbar(data = subset(plot_dyn, !significant),
                   aes(ymin = conf.low, ymax = conf.high),
+                  position = position_dodge(width = 0.5),
                   width = 0, linetype = "dotted") +
     geom_hline(yintercept = 0, linetype = "dashed") +
     geom_vline(xintercept = 0, linetype = "dashed") +
@@ -337,6 +339,8 @@ ggplot(plot_dyn, aes(x = time, y = estimate, color = setting)) +
         legend.margin = margin(b = 5)
     ) +
     facet_wrap(~ outcome_label, scales = "free_y", nrow = 2, ncol = 4)
+
+print(dynamic_plot)
 
 ggsave("../plots/dynamic_effects_comparison.pdf",
   plot = dynamic_plot, width = 10.5, height = 5,
