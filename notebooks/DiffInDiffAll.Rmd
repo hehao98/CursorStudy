@@ -5,6 +5,8 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+knitr::opts_chunk$set(dev = 'CairoPNG', dpi = 150)
+options(bitmapType = 'cairo')
 ```
 
 ## Loading Required Packages
@@ -20,6 +22,7 @@ library(gridExtra)
 library(knitr)
 library(kableExtra)
 library(tibble)
+library(Cairo)
 ```
 
 ## Loading and Preparing the Data
@@ -280,7 +283,7 @@ print(static_plot)
 
 ggsave("../plots/static_effects.pdf",
   plot = static_plot, width = 5, height = 5,
-  device = cairo_pdf)
+  device = CairoPDF)
 ```
 
 ## Static Treatment Effects Table
@@ -518,7 +521,7 @@ print(dynamic_plot)
 
 ggsave("../plots/dynamic_effects.pdf",
   plot = dynamic_plot, width = 10.5, height = 5,
-  device = cairo_pdf, family = "DejaVu Sans")
+  device = CairoPDF, family = "DejaVu Sans")
 ```
 
 ```{r dynamic_effects_lastrow, fig.width=7.5, fig.height=3}
@@ -560,7 +563,7 @@ print(dynamic_plot_last)
 
 ggsave("../plots/dynamic_effects_lastrow.pdf",
   plot = dynamic_plot_last, width = 7.5, height = 3.0,
-  device = cairo_pdf, family = "DejaVu Sans")
+  device = CairoPDF, family = "DejaVu Sans")
 ```
 
 ## Pre-Trend Tests (Heteroskedasticity- and Cluster-Robust Wald)

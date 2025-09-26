@@ -5,6 +5,8 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+knitr::opts_chunk$set(dev = 'CairoPNG', dpi = 150)
+options(bitmapType = 'cairo')
 ```
 
 ## Loading Required Packages
@@ -15,6 +17,7 @@ library(ggplot2)
 library(data.table)
 library(cowplot)
 library(scales)
+library(Cairo)
 ```
 
 ## Loading and Preparing the Data
@@ -98,7 +101,7 @@ outcome_names <- c(
 
 ## Raw Event Plots with Boxplots
 
-```{r raw_event_plots, fig.width=5, fig.height=7}
+```{r raw_event_plots, fig.width=10.5, fig.height=5}
 # Create boxplots for each outcome variable
 plot_list <- list()
 
@@ -134,12 +137,12 @@ for (i in seq_along(outcome_vars)) {
 }
 
 # Arrange plots in a grid with proper alignment using cowplot
-combined_plot <- plot_grid(plotlist = plot_list, ncol = 2, align = "hv", axis = "tblr")
+combined_plot <- plot_grid(plotlist = plot_list, ncol = 4, align = "hv", axis = "tblr")
 
 # Display the plot
 print(combined_plot)
 
 # Save the plot
 ggsave("../plots/descriptive_pre_post.pdf",
-  plot = combined_plot, width = 5, height = 7)
+  plot = combined_plot, width = 10.5, height = 5, device = CairoPDF)
 ```

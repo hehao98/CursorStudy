@@ -5,6 +5,8 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+knitr::opts_chunk$set(dev = 'CairoPNG', dpi = 150)
+options(bitmapType = 'cairo')
 utils::globalVariables(c(
     "estimate", "is_significant", "conf.low", "conf.high",
     "term", "setting", "outcome", "outcome_label", "time"
@@ -21,6 +23,7 @@ library(data.table)
 library(modelsummary)
 library(fixest)
 library(gridExtra)
+library(Cairo)
 ```
 
 ## Loading and Preparing the Data
@@ -344,5 +347,5 @@ print(dynamic_plot)
 
 ggsave("../plots/dynamic_effects_comparison.pdf",
   plot = dynamic_plot, width = 10.5, height = 5,
-  device = cairo_pdf, family = "DejaVu Sans")
+  device = CairoPDF, family = "DejaVu Sans")
 ```

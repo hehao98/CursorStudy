@@ -5,6 +5,8 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, fig.width = 5, fig.height = 3)
+knitr::opts_chunk$set(dev = 'CairoPNG', dpi = 150)
+options(bitmapType = 'cairo')
 ```
 
 ```{r}
@@ -12,6 +14,7 @@ knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, fig.width =
 library(tidyverse)
 library(lubridate)
 library(scales)
+library(Cairo)
 
 # Set global ggplot theme - black axis lines, no grid
 theme_set(theme_minimal() +
@@ -66,7 +69,7 @@ p <- ggplot(adoption_counts, aes(x = adoption_yearmonth, y = n)) +
 
 print(p)
 
-ggsave("../plots/cursor_adoption_time.pdf", plot = p, width = 5, height = 2.5)
+ggsave("../plots/cursor_adoption_time.pdf", plot = p, width = 5, height = 2.5, device = CairoPDF)
 ```
 
 ## Distribution of Repository Creation Time
@@ -99,5 +102,5 @@ p2 <- ggplot(creation_counts, aes(x = creation_yearquarter, y = n)) +
 
 print(p2)
 
-ggsave("../plots/repo_creation_time.pdf", plot = p2, width = 9, height = 3)
+ggsave("../plots/repo_creation_time.pdf", plot = p2, width = 9, height = 3, device = CairoPDF)
 ```
