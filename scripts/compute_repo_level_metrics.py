@@ -12,7 +12,7 @@ who have at least one cursor-file changing commit.
 
 import logging
 import sys
-from typing import Dict, Set, Tuple
+from typing import Any, Dict, Set, Tuple
 
 import pandas as pd
 
@@ -63,6 +63,28 @@ def get_cursor_developers(cursor_commits_df: pd.DataFrame) -> Dict[str, Set[str]
     return cursor_devs
 
 
+def compute_first_cursor_commit_times(
+    cursor_commits_df: pd.DataFrame,
+) -> Dict[str, str]:
+    """Compute first cursor commit authored_at timestamp per repository."""
+    logging.info("Computing first cursor commit times...")
+
+    if cursor_commits_df.empty:
+        return {}
+
+    if "repo_name" not in cursor_commits_df or "authored_at" not in cursor_commits_df:
+        logging.warning("cursor_commits_df missing required columns")
+        return {}
+
+    first_times_series = cursor_commits_df.groupby("repo_name")["authored_at"].min()
+    first_times: Dict[str, str] = first_times_series.to_dict()
+
+    logging.info(
+        "Computed first cursor commit times for %d repositories", len(first_times)
+    )
+    return first_times
+
+
 def count_commits_per_developer(
     contributors_df: pd.DataFrame,
 ) -> Dict[str, Dict[str, int]]:
@@ -93,7 +115,8 @@ def compute_cursor_metrics(
     cursor_commits_df: pd.DataFrame,
     cursor_developers: Dict[str, Set[str]],
     commits_by_repo_dev: Dict[str, Dict[str, int]],
-) -> Dict[str, Dict[str, float]]:
+    first_cursor_commit_times: Dict[str, str],
+) -> Dict[str, Dict[str, Any]]:
     """Compute cursor adoption metrics for each repository."""
     logging.info("Computing cursor adoption metrics...")
     results = {}
@@ -130,9 +153,12 @@ def compute_cursor_metrics(
                 else 0.0
             )
 
+        adoption_time = first_cursor_commit_times.get(repo, "")
+
         results[repo] = {
             "cursor_commits": cursor_commits_count,
             "cursor_adoptor_percentage": cursor_adoptor_percentage,
+            "cursor_adoption_time": adoption_time,
         }
 
     repos_with_cursor_commits = sum(
@@ -146,7 +172,7 @@ def compute_cursor_metrics(
     return results
 
 
-def save_results(results: Dict[str, Dict[str, float]], output_file: str) -> None:
+def save_results(results: Dict[str, Dict[str, Any]], output_file: str) -> None:
     """Save results to CSV file."""
     logging.info("Saving results to %s", output_file)
     data = []
@@ -156,6 +182,7 @@ def save_results(results: Dict[str, Dict[str, float]], output_file: str) -> None
                 "repo_name": repo,
                 "cursor_commits": metrics["cursor_commits"],
                 "cursor_adoptor_percentage": metrics["cursor_adoptor_percentage"],
+                "cursor_adoption_time": metrics["cursor_adoption_time"],
             }
         )
 
@@ -197,12 +224,16 @@ def main() -> None:
         # Count commits per developer
         commits_by_repo_dev = count_commits_per_developer(contributors_df)
 
+        # Compute first cursor commit times per repo
+        first_cursor_commit_times = compute_first_cursor_commit_times(cursor_commits_df)
+
         # Compute metrics
         results = compute_cursor_metrics(
             repos_with_min_stars,
             cursor_commits_df,
             cursor_developers,
             commits_by_repo_dev,
+            first_cursor_commit_times,
         )
 
         # Save results

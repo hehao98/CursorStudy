@@ -26,32 +26,41 @@ theme_set(theme_minimal() +
 ## Data Loading and Exploration
 
 ```{r}
-# Load the dataset
-data_path <- "../data/repos.csv"
-repos_df <- read_csv(data_path)
+# Load the datasets
+repos_path <- "../data/repos.csv"
+metrics_path <- "../data/repo_metrics.csv"
+
+repos_df <- read_csv(repos_path)
+metrics_df <- read_csv(metrics_path)
 
 # Display basic info
-print(glue::glue("Dataset shape: {nrow(repos_df)} rows x {ncol(repos_df)} columns"))
+print(glue::glue("Repos: {nrow(repos_df)} rows x {ncol(repos_df)} columns"))
+print(glue::glue("Metrics: {nrow(metrics_df)} rows x {ncol(metrics_df)} columns"))
 
-# Convert datetime columns to R datetime format
+# Convert datetime columns
 repos_df <- repos_df %>%
     mutate(
         repo_created = ymd_hms(repo_created),
-        repo_updated = ymd_hms(repo_updated),
-        repo_cursor_adoption = ymd_hms(repo_cursor_adoption),
-        adoption_yearmonth = format(repo_cursor_adoption, "%Y-%m")
+        repo_updated = ymd_hms(repo_updated)
+    )
+
+metrics_df <- metrics_df %>%
+    mutate(
+        cursor_adoption_time = ymd_hms(cursor_adoption_time),
+        adoption_yearmonth = format(cursor_adoption_time, "%Y-%m")
     ) %>%
-    filter(!is.na(repo_cursor_adoption))
+    filter(!is.na(cursor_adoption_time)) %>%
+    filter(cursor_adoption_time < ymd("2025-04-01"))
 
 # View data structure
-glimpse(repos_df)
+glimpse(metrics_df)
 ```
 
 ## Distribution of Cursor Adoption Time
 
 ```{r}
 # Plot cursor adoption over time (by year-month) with bar chart and numbers on top
-adoption_counts <- repos_df %>%
+adoption_counts <- metrics_df %>%
     count(adoption_yearmonth) %>%
     arrange(adoption_yearmonth)
 
@@ -69,7 +78,7 @@ p <- ggplot(adoption_counts, aes(x = adoption_yearmonth, y = n)) +
 
 print(p)
 
-ggsave("../plots/cursor_adoption_time.pdf", plot = p, width = 5, height = 2.5, device = CairoPDF)
+ggsave("../plots/cursor_adoption_time.pdf", plot = p, width = 5, height = 2.5, device = CairoPDF, family = "DejaVu Sans")
 ```
 
 ## Distribution of Repository Creation Time
@@ -102,5 +111,5 @@ p2 <- ggplot(creation_counts, aes(x = creation_yearquarter, y = n)) +
 
 print(p2)
 
-ggsave("../plots/repo_creation_time.pdf", plot = p2, width = 9, height = 3, device = CairoPDF)
+ggsave("../plots/repo_creation_time.pdf", plot = p2, width = 9, height = 3, device = CairoPDF, family = "DejaVu Sans")
 ```

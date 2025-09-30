@@ -101,7 +101,7 @@ outcome_names <- c(
 
 ## Raw Event Plots with Boxplots
 
-```{r raw_event_plots, fig.width=10.5, fig.height=5}
+```{r raw_event_plots, fig.width=10.5, fig.height=4}
 # Create boxplots for each outcome variable
 plot_list <- list()
 
@@ -114,7 +114,7 @@ for (i in seq_along(outcome_vars)) {
     p <- ggplot(panel_data, aes(x = factor(relative_time), y = !!sym(var))) +
         geom_boxplot(alpha = 0.7, outlier.alpha = 0.5, fill = "#0072B2") +
         geom_vline(xintercept = which(levels(factor(panel_data$relative_time)) == "0"),
-                   linetype = "dashed", color = "red", size = 1) +
+                   linetype = "dashed", color = "blue", size = 1) +
         labs(x = "Months Relative to Adoption",
             y = name
         ) +
@@ -126,10 +126,7 @@ for (i in seq_along(outcome_vars)) {
             axis.title.x = element_text(size = 9),
             axis.title.y = element_text(size = 9),
             axis.text.y = element_text(size = 8),
-            plot.margin = margin(2, 2, 2, 2, "pt"),
-            panel.grid = element_blank(),
-            axis.line = element_line(color = "black", size = 0.3),
-            axis.ticks = element_line(color = "black", size = 0.3)
+            plot.margin = margin(2, 2, 2, 2, "pt")
         ) +
         scale_y_continuous(expand = c(0.02, 0), labels = scales::number_format(accuracy = 0.1))
 
@@ -144,5 +141,5 @@ print(combined_plot)
 
 # Save the plot
 ggsave("../plots/descriptive_pre_post.pdf",
-  plot = combined_plot, width = 10.5, height = 5, device = CairoPDF)
+  plot = combined_plot, width = 10.5, height = 4, device = CairoPDF, family = "DejaVu Sans")
 ```

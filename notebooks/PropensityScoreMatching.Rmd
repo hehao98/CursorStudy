@@ -187,7 +187,7 @@ print(box_plot)
 
 # Save the plot
 ggsave("../plots/log_boxplots_combined.pdf",
-  plot = box_plot, width = 14, height = 8, device = CairoPDF)
+  plot = box_plot, width = 14, height = 8, device = CairoPDF, family = "DejaVu Sans")
 ```
 
 ## Visualizing Propensity Score Distributions
@@ -221,5 +221,5 @@ plot <- ggplot(ps_data, aes(x = Value, fill = Group)) +
 print(plot)
 
 ggsave("../plots/propensity_score_distribution.pdf",
-  plot = plot, width = 5, height = 2.5, device = CairoPDF)
+  plot = plot, width = 5, height = 2.5, device = CairoPDF, family = "DejaVu Sans")
 ```
