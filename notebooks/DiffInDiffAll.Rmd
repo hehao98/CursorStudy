@@ -372,17 +372,19 @@ extract_dynamic_effects <- function(results, method_name, variables = NULL) {
             effects_list[[var]] <- df
         } else if (method_name == "Borusyak et al.") {
             result <- results[[var]]
-            dynamic_data <- result[result$term != "treat", ]
+            # Filter to only time-related coefficients (exclude "treat", covariates, and fixed effects)
+            # Convert term to numeric first, then filter to valid time periods
+            time_numeric <- suppressWarnings(as.numeric(as.character(result$term)))
+            valid_idx <- !is.na(time_numeric) & time_numeric >= -6 & time_numeric <= 6
+
             df <- data.frame(
                 outcome = var,
                 method = method_name,
-                time = as.numeric(dynamic_data$term),
-                estimate = dynamic_data$estimate,
-                conf.low = dynamic_data$conf.low,
-                conf.high = dynamic_data$conf.high
+                time = time_numeric[valid_idx],
+                estimate = result$estimate[valid_idx],
+                conf.low = result$conf.low[valid_idx],
+                conf.high = result$conf.high[valid_idx]
             )
-            # Drop event-time -1 to avoid anticipation period
-            df <- df[df$time != -1, , drop = FALSE]
             effects_list[[var]] <- df
         } else if (method_name == "Two Way Fixed Effects") {
             # Run event study for TWFE
@@ -465,7 +467,7 @@ dynamic_effects <- dynamic_effects %>%
         # Calculate p-value (two-tailed)
         p_value = 2 * (1 - pnorm(abs(z_stat))),
         # Create significance indicator
-        significant = p_value < 0.05,
+        significant = !is.na(p_value) & p_value < 0.05,
         # Create aesthetic variables
         point_shape = ifelse(significant, 19, 21),  # filled vs hollow circles
         line_type = ifelse(significant, "solid", "dotted")
@@ -503,7 +505,7 @@ dynamic_plot <- ggplot(dynamic_effects_top, aes(x = time, y = estimate, color = 
         "Callaway and Sant'Anna" = "#0072B2"   # Colorblind-friendly blue
     )) +
     facet_wrap(~outcome, scales = "free_y", ncol = 4) +
-    scale_x_continuous(limits = c(-6, 6), breaks = -6:6) +
+    scale_x_continuous(limits = c(-6.5, 6.5), breaks = -6:6) +
     labs(
         x = "Months Relative to Cursor Adoption",
         y = "Treatment Effect",
@@ -545,7 +547,7 @@ dynamic_plot_last <- ggplot(dynamic_effects_last, aes(x = time, y = estimate, co
         "Callaway and Sant'Anna" = "#0072B2"
     )) +
     facet_wrap(~outcome, scales = "free_y", ncol = 3) +
-    scale_x_continuous(limits = c(-6, 6), breaks = -6:6) +
+    scale_x_continuous(limits = c(-6.5, 6.5), breaks = -6:6) +
     labs(
         x = "Months Relative to Cursor Adoption",
         y = "Treatment Effect",
@@ -648,7 +650,7 @@ callaway_pretrend_test <- function(attgt_obj) {
 # Borusyak et al.: use horizon results; build diagonal V from robust SEs
 borusyak_pretrend_test <- function(bjs_dyn_df) {
     dyn_df <- bjs_dyn_df[bjs_dyn_df$term != "treat", ]
-    dyn_df$time_num <- suppressWarnings(as.numeric(dyn_df$term))
+    dyn_df$time_num <- suppressWarnings(as.numeric(gsub("[\u2212\u2013\u2014]", "-", as.character(dyn_df$term))))
     pre_df <- dyn_df[!is.na(dyn_df$time_num) & dyn_df$time_num < 0, ]
     beta <- pre_df$estimate
 
