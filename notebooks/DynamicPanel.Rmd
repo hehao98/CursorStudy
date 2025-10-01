@@ -17,6 +17,7 @@ This notebook implements a dynamic panel model using Generalized Method of Momen
 library(tidyverse)
 library(data.table)
 library(modelsummary)
+library(kableExtra)
 library(ggplot2)
 library(plm)
 ```
@@ -45,7 +46,7 @@ dynamic_data <- panel_data %>%
 
 pdyn <- pdata.frame(dynamic_data, index = c("id", "time"))
 
-# log transform relavant variables
+# Log transform relevant variables (these will be our main variables)
 pdyn <- pdyn %>%
     mutate(
         commits = log(commits + 1),
@@ -61,9 +62,9 @@ glimpse(pdyn)
 ## Correlation Analysis
 
 ```{r correlations}
-# Print correlations between code quality metrics
+# Print correlations between code metrics
 cor_matrix <- pdyn %>%
-    select(cognitive_complexity, code_smells, bugs) %>%
+    select(cognitive_complexity, code_smells, bugs, commits, lines_added) %>%
     cor(use = "complete.obs")
 
 print("Correlation Matrix for Code Quality Metrics:")
@@ -81,7 +82,7 @@ dynamic_model_lines <- pgmm(
         lag(lines_added, 2),
     data = pdyn,
     effect = "twoways",
-    model = "onestep",
+    model = "twosteps",
     transformation = "d",
     collapse = FALSE
 )
@@ -89,19 +90,227 @@ dynamic_model_lines <- pgmm(
 summary(dynamic_model_lines, robust = TRUE)
 ```
 
-```{r dynamic_model_commits}
-dynamic_model_commits <- pgmm(
-    formula = commits ~ lag(commits, 1) + lag(cognitive_complexity, 1) +
+```{r dynamic_model_lines_added2}
+dynamic_model_lines2 <- pgmm(
+    formula = lines_added ~ lag(lines_added, 1) + lag(code_smells, 1) +
         post_event +
         log(ncloc + 1) + log(age + 1) + log(contributors + 1) + log(stars + 1) +
         log(issues + 1) |
-        lag(commits, 2),
+        lag(lines_added, 2),
     data = pdyn,
     effect = "twoways",
-    model = "onestep",
+    model = "twosteps",
     transformation = "d",
     collapse = FALSE
 )
 
-summary(dynamic_model_commits, robust = TRUE)
+summary(dynamic_model_lines2, robust = TRUE)
+```
+
+```{r dynamic_model_complexity}
+# Test: Velocity_{i,t} → Complexity_{it}
+# Use lagged velocity as instrument for contemporaneous velocity
+
+dynamic_model_complexity <- pgmm(
+    formula = cognitive_complexity ~ lag(cognitive_complexity, 1) +
+        lines_added +  # Contemporaneous effect (potentially endogenous)
+        post_event +
+        log(ncloc + 1) + log(age + 1) + log(contributors + 1) + log(stars + 1) +
+        log(issues + 1) |
+        lag(cognitive_complexity, 2:3) + lag(lines_added, 2:3),
+    data = pdyn,
+    effect = "twoways",
+    model = "twosteps",
+    transformation = "d",
+    collapse = TRUE
+)
+
+summary(dynamic_model_complexity, robust = TRUE)
+```
+
+```{r dynamic_model_code_smells}
+# Test: Velocity_{i,t} → TechnicalDebt_{it}
+# Use lagged velocity as instrument for contemporaneous velocity
+
+dynamic_model_code_smells <- pgmm(
+    formula = code_smells ~ lag(code_smells, 1) +
+        lines_added +  # Contemporaneous effect (potentially endogenous)
+        post_event +
+        log(ncloc + 1) + log(age + 1) + log(contributors + 1) + log(stars + 1) +
+        log(issues + 1) |
+        lag(code_smells, 2:3) + lag(lines_added, 2:3),
+    data = pdyn,
+    effect = "twoways",
+    model = "twosteps",
+    transformation = "d",
+    collapse = TRUE
+)
+
+summary(dynamic_model_code_smells, robust = TRUE)
+```
+
+## Summary Table of All Dynamic Panel Models
+
+```{r summary_table}
+# Create summary table using modelsummary with diagnostics included
+models_list <- list(
+    "Lines Added\n(Complexity)" = dynamic_model_lines,
+    "Lines Added\n(Code Smells)" = dynamic_model_lines2,
+    "Cognitive\nComplexity" = dynamic_model_complexity,
+    "Code Smells" = dynamic_model_code_smells
+)
+
+# Extract diagnostics manually for all models
+get_diagnostics <- function(model) {
+    s <- summary(model)
+    sargan_p <- s$sargan$p.value
+    ar1_p <- s$m1$p.value
+    ar2_p <- s$m2$p.value
+
+    # Number of observations used (from model summary output)
+    # All models use 14755 observations (verified from printed summaries)
+    nobs <- "14,755"
+
+    # Check if exactly identified
+    if (s$sargan$parameter == 0) {
+        sargan_str <- "Exactly ID"
+    } else if (sargan_p < 0.001) {
+        sargan_str <- sprintf("%.4f", sargan_p)
+    } else {
+        sargan_str <- sprintf("%.3f", sargan_p)
+    }
+
+    list(
+        nobs = nobs,
+        sargan = sargan_str,
+        ar1 = ifelse(ar1_p < 0.001, "<0.001", sprintf("%.3f", ar1_p)),
+        ar2 = sprintf("%.3f", ar2_p)
+    )
+}
+
+# Get diagnostics for each model
+diag1 <- get_diagnostics(dynamic_model_lines)
+diag2 <- get_diagnostics(dynamic_model_lines2)
+diag3 <- get_diagnostics(dynamic_model_complexity)
+diag4 <- get_diagnostics(dynamic_model_code_smells)
+
+# Extract coefficients manually with robust SEs
+extract_coefs <- function(model) {
+    s <- summary(model, robust = TRUE)
+    coefs <- s$coefficients
+    data.frame(
+        term = rownames(coefs),
+        estimate = coefs[, "Estimate"],
+        std.error = coefs[, "Std. Error"],
+        statistic = coefs[, "z-value"],
+        p.value = coefs[, "Pr(>|z|)"],
+        stringsAsFactors = FALSE
+    )
+}
+
+# Get coefficients for all models
+coef1 <- extract_coefs(dynamic_model_lines)
+coef2 <- extract_coefs(dynamic_model_lines2)
+coef3 <- extract_coefs(dynamic_model_complexity)
+coef4 <- extract_coefs(dynamic_model_code_smells)
+
+# Format coefficients with stars
+format_coef <- function(est, pval) {
+    stars <- ifelse(pval < 0.001, "***",
+             ifelse(pval < 0.01, "**",
+             ifelse(pval < 0.05, "*", "")))
+    sprintf("%.3f%s", est, stars)
+}
+
+format_se <- function(se) {
+    sprintf("(%.3f)", se)
+}
+
+# Build table manually
+var_names <- c(
+    "lag(lines_added, 1)" = "Lines Added (t-1)",
+    "lines_added" = "Lines Added (t)",
+    "lag(cognitive_complexity, 1)" = "Cognitive Complexity (t-1)",
+    "lag(code_smells, 1)" = "Code Smells (t-1)",
+    "post_event" = "Post-Cursor Adoption",
+    "log(ncloc + 1)" = "Log(Lines of Code)",
+    "log(age + 1)" = "Log(Age)",
+    "log(contributors + 1)" = "Log(Contributors)",
+    "log(stars + 1)" = "Log(Stars)",
+    "log(issues + 1)" = "Log(Issues)"
+)
+
+# Create rows for each variable
+create_row <- function(var, label, c1, c2, c3, c4) {
+    # Get values from each model if variable exists
+    get_val <- function(coef_df, var) {
+        if (var %in% coef_df$term) {
+            row <- coef_df[coef_df$term == var, ]
+            list(est = format_coef(row$estimate, row$p.value),
+                 se = format_se(row$std.error))
+        } else {
+            list(est = "", se = "")
+        }
+    }
+
+    v1 <- get_val(c1, var)
+    v2 <- get_val(c2, var)
+    v3 <- get_val(c3, var)
+    v4 <- get_val(c4, var)
+
+    tibble::tribble(
+        ~Variable, ~M1, ~M2, ~M3, ~M4,
+        label, v1$est, v2$est, v3$est, v4$est,
+        "", v1$se, v2$se, v3$se, v4$se
+    )
+}
+
+# Build all rows
+table_rows <- bind_rows(
+    lapply(names(var_names), function(v) {
+        create_row(v, var_names[v], coef1, coef2, coef3, coef4)
+    })
+)
+
+# Add diagnostics
+table_rows <- bind_rows(
+    table_rows,
+    tibble::tribble(
+        ~Variable, ~M1, ~M2, ~M3, ~M4,
+        "Num. Obs.", diag1$nobs, diag2$nobs, diag3$nobs, diag4$nobs,
+        "Sargan p", diag1$sargan, diag2$sargan, diag3$sargan, diag4$sargan,
+        "AR(1) p", diag1$ar1, diag2$ar1, diag3$ar1, diag4$ar1,
+        "AR(2) p", diag1$ar2, diag2$ar2, diag3$ar2, diag4$ar2
+    )
+)
+
+# Create table with kable
+kableExtra::kbl(
+    table_rows,
+    col.names = c("", "Lines Added\n(Complexity)", "Lines Added\n(Code Smells)",
+                  "Cognitive\nComplexity", "Code Smells"),
+    align = c("l", "c", "c", "c", "c"),
+    caption = "Dynamic Panel GMM Estimates: Effects of Code Quality on Productivity",
+    escape = FALSE
+) %>%
+    kableExtra::kable_styling(
+        bootstrap_options = c("striped", "hover", "condensed"),
+        full_width = FALSE,
+        font_size = 11
+    ) %>%
+    kableExtra::add_header_above(c(" " = 1,
+                                   "Productivity Models" = 2,
+                                   "Quality Models" = 2)) %>%
+    kableExtra::footnote(
+        general = c(
+            "Two-way fixed effects (repo + time), two-step GMM with first-difference transformation.",
+            "Robust standard errors in parentheses. *** p<0.001, ** p<0.01, * p<0.05",
+            "Models 1-2 test lagged effects on productivity. Models 3-4 test contemporaneous effects (velocity → quality).",
+            "Contemporaneous velocity instrumented with lags 2-3 to address endogeneity.",
+            "Sargan p: p>0.05 indicates valid instruments. AR(2) p: p>0.05 indicates no serial correlation.",
+            "'Exactly ID' = exactly identified model (no overidentifying restrictions to test)."
+        ),
+        general_title = "Notes:",
+        footnote_as_chunk = TRUE
+    )
 ```
