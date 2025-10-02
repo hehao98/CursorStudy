@@ -149,6 +149,84 @@ dynamic_model_code_smells <- pgmm(
 summary(dynamic_model_code_smells, robust = TRUE)
 ```
 
+## Alternative Models Using Commits as Productivity Measure
+
+```{r dynamic_model_commits}
+dynamic_model_commits <- pgmm(
+    formula = commits ~ lag(commits, 1) + lag(cognitive_complexity, 1) +
+        post_event +
+        log(ncloc + 1) + log(age + 1) + log(contributors + 1) + log(stars + 1) +
+        log(issues + 1) |
+        lag(commits, 2),
+    data = pdyn,
+    effect = "twoways",
+    model = "twosteps",
+    transformation = "d",
+    collapse = FALSE
+)
+
+summary(dynamic_model_commits, robust = TRUE)
+```
+
+```{r dynamic_model_commits2}
+dynamic_model_commits2 <- pgmm(
+    formula = commits ~ lag(commits, 1) + lag(code_smells, 1) +
+        post_event +
+        log(ncloc + 1) + log(age + 1) + log(contributors + 1) + log(stars + 1) +
+        log(issues + 1) |
+        lag(commits, 2),
+    data = pdyn,
+    effect = "twoways",
+    model = "twosteps",
+    transformation = "d",
+    collapse = FALSE
+)
+
+summary(dynamic_model_commits2, robust = TRUE)
+```
+
+```{r dynamic_model_complexity_commits}
+# Test: Commits_{i,t} → Complexity_{it}
+# Use lagged commits as instrument for contemporaneous commits
+
+dynamic_model_complexity_commits <- pgmm(
+    formula = cognitive_complexity ~ lag(cognitive_complexity, 1) +
+        commits +  # Contemporaneous effect (potentially endogenous)
+        post_event +
+        log(ncloc + 1) + log(age + 1) + log(contributors + 1) + log(stars + 1) +
+        log(issues + 1) |
+        lag(cognitive_complexity, 2:3) + lag(commits, 2:3),
+    data = pdyn,
+    effect = "twoways",
+    model = "twosteps",
+    transformation = "d",
+    collapse = TRUE
+)
+
+summary(dynamic_model_complexity_commits, robust = TRUE)
+```
+
+```{r dynamic_model_code_smells_commits}
+# Test: Commits_{i,t} → TechnicalDebt_{it}
+# Use lagged commits as instrument for contemporaneous commits
+
+dynamic_model_code_smells_commits <- pgmm(
+    formula = code_smells ~ lag(code_smells, 1) +
+        commits +  # Contemporaneous effect (potentially endogenous)
+        post_event +
+        log(ncloc + 1) + log(age + 1) + log(contributors + 1) + log(stars + 1) +
+        log(issues + 1) |
+        lag(code_smells, 2:3) + lag(commits, 2:3),
+    data = pdyn,
+    effect = "twoways",
+    model = "twosteps",
+    transformation = "d",
+    collapse = TRUE
+)
+
+summary(dynamic_model_code_smells_commits, robust = TRUE)
+```
+
 ## Summary Table of All Dynamic Panel Models
 
 ```{r summary_table}
@@ -156,8 +234,12 @@ summary(dynamic_model_code_smells, robust = TRUE)
 models_list <- list(
     "Lines Added\n(Complexity)" = dynamic_model_lines,
     "Lines Added\n(Code Smells)" = dynamic_model_lines2,
-    "Cognitive\nComplexity" = dynamic_model_complexity,
-    "Code Smells" = dynamic_model_code_smells
+    "Cognitive\nComplexity\n(Lines)" = dynamic_model_complexity,
+    "Code Smells\n(Lines)" = dynamic_model_code_smells,
+    "Commits\n(Complexity)" = dynamic_model_commits,
+    "Commits\n(Code Smells)" = dynamic_model_commits2,
+    "Cognitive\nComplexity\n(Commits)" = dynamic_model_complexity_commits,
+    "Code Smells\n(Commits)" = dynamic_model_code_smells_commits
 )
 
 # Extract diagnostics manually for all models
@@ -193,6 +275,10 @@ diag1 <- get_diagnostics(dynamic_model_lines)
 diag2 <- get_diagnostics(dynamic_model_lines2)
 diag3 <- get_diagnostics(dynamic_model_complexity)
 diag4 <- get_diagnostics(dynamic_model_code_smells)
+diag5 <- get_diagnostics(dynamic_model_commits)
+diag6 <- get_diagnostics(dynamic_model_commits2)
+diag7 <- get_diagnostics(dynamic_model_complexity_commits)
+diag8 <- get_diagnostics(dynamic_model_code_smells_commits)
 
 # Extract coefficients manually with robust SEs
 extract_coefs <- function(model) {
@@ -213,6 +299,10 @@ coef1 <- extract_coefs(dynamic_model_lines)
 coef2 <- extract_coefs(dynamic_model_lines2)
 coef3 <- extract_coefs(dynamic_model_complexity)
 coef4 <- extract_coefs(dynamic_model_code_smells)
+coef5 <- extract_coefs(dynamic_model_commits)
+coef6 <- extract_coefs(dynamic_model_commits2)
+coef7 <- extract_coefs(dynamic_model_complexity_commits)
+coef8 <- extract_coefs(dynamic_model_code_smells_commits)
 
 # Format coefficients with stars
 format_coef <- function(est, pval) {
@@ -229,7 +319,9 @@ format_se <- function(se) {
 # Build table manually
 var_names <- c(
     "lag(lines_added, 1)" = "Lines Added (t-1)",
+    "lag(commits, 1)" = "Commits (t-1)",
     "lines_added" = "Lines Added (t)",
+    "commits" = "Commits (t)",
     "lag(cognitive_complexity, 1)" = "Cognitive Complexity (t-1)",
     "lag(code_smells, 1)" = "Code Smells (t-1)",
     "post_event" = "Post-Cursor Adoption",
@@ -241,7 +333,7 @@ var_names <- c(
 )
 
 # Create rows for each variable
-create_row <- function(var, label, c1, c2, c3, c4) {
+create_row <- function(var, label, c1, c2, c3, c4, c5, c6, c7, c8) {
     # Get values from each model if variable exists
     get_val <- function(coef_df, var) {
         if (var %in% coef_df$term) {
@@ -257,18 +349,22 @@ create_row <- function(var, label, c1, c2, c3, c4) {
     v2 <- get_val(c2, var)
     v3 <- get_val(c3, var)
     v4 <- get_val(c4, var)
+    v5 <- get_val(c5, var)
+    v6 <- get_val(c6, var)
+    v7 <- get_val(c7, var)
+    v8 <- get_val(c8, var)
 
     tibble::tribble(
-        ~Variable, ~M1, ~M2, ~M3, ~M4,
-        label, v1$est, v2$est, v3$est, v4$est,
-        "", v1$se, v2$se, v3$se, v4$se
+        ~Variable, ~M1, ~M2, ~M3, ~M4, ~M5, ~M6, ~M7, ~M8,
+        label, v1$est, v2$est, v3$est, v4$est, v5$est, v6$est, v7$est, v8$est,
+        "", v1$se, v2$se, v3$se, v4$se, v5$se, v6$se, v7$se, v8$se
     )
 }
 
 # Build all rows
 table_rows <- bind_rows(
     lapply(names(var_names), function(v) {
-        create_row(v, var_names[v], coef1, coef2, coef3, coef4)
+        create_row(v, var_names[v], coef1, coef2, coef3, coef4, coef5, coef6, coef7, coef8)
     })
 )
 
@@ -276,11 +372,11 @@ table_rows <- bind_rows(
 table_rows <- bind_rows(
     table_rows,
     tibble::tribble(
-        ~Variable, ~M1, ~M2, ~M3, ~M4,
-        "Num. Obs.", diag1$nobs, diag2$nobs, diag3$nobs, diag4$nobs,
-        "Sargan p", diag1$sargan, diag2$sargan, diag3$sargan, diag4$sargan,
-        "AR(1) p", diag1$ar1, diag2$ar1, diag3$ar1, diag4$ar1,
-        "AR(2) p", diag1$ar2, diag2$ar2, diag3$ar2, diag4$ar2
+        ~Variable, ~M1, ~M2, ~M3, ~M4, ~M5, ~M6, ~M7, ~M8,
+        "Num. Obs.", diag1$nobs, diag2$nobs, diag3$nobs, diag4$nobs, diag5$nobs, diag6$nobs, diag7$nobs, diag8$nobs,
+        "Sargan p", diag1$sargan, diag2$sargan, diag3$sargan, diag4$sargan, diag5$sargan, diag6$sargan, diag7$sargan, diag8$sargan,
+        "AR(1) p", diag1$ar1, diag2$ar1, diag3$ar1, diag4$ar1, diag5$ar1, diag6$ar1, diag7$ar1, diag8$ar1,
+        "AR(2) p", diag1$ar2, diag2$ar2, diag3$ar2, diag4$ar2, diag5$ar2, diag6$ar2, diag7$ar2, diag8$ar2
     )
 )
 
@@ -288,25 +384,29 @@ table_rows <- bind_rows(
 kableExtra::kbl(
     table_rows,
     col.names = c("", "Lines Added\n(Complexity)", "Lines Added\n(Code Smells)",
-                  "Cognitive\nComplexity", "Code Smells"),
-    align = c("l", "c", "c", "c", "c"),
-    caption = "Dynamic Panel GMM Estimates: Effects of Code Quality on Productivity",
+                  "Cognitive\nComplexity\n(Lines)", "Code Smells\n(Lines)",
+                  "Commits\n(Complexity)", "Commits\n(Code Smells)",
+                  "Cognitive\nComplexity\n(Commits)", "Code Smells\n(Commits)"),
+    align = c("l", "c", "c", "c", "c", "c", "c", "c", "c"),
+    caption = "Dynamic Panel GMM Estimates: Effects of Code Quality on Productivity (Lines Added vs Commits)",
     escape = FALSE
 ) %>%
     kableExtra::kable_styling(
         bootstrap_options = c("striped", "hover", "condensed"),
         full_width = FALSE,
-        font_size = 11
+        font_size = 10
     ) %>%
     kableExtra::add_header_above(c(" " = 1,
-                                   "Productivity Models" = 2,
-                                   "Quality Models" = 2)) %>%
+                                   "Lines Added Models" = 2,
+                                   "Quality (Lines)" = 2,
+                                   "Commits Models" = 2,
+                                   "Quality (Commits)" = 2)) %>%
     kableExtra::footnote(
         general = c(
             "Two-way fixed effects (repo + time), two-step GMM with first-difference transformation.",
             "Robust standard errors in parentheses. *** p<0.001, ** p<0.01, * p<0.05",
-            "Models 1-2 test lagged effects on productivity. Models 3-4 test contemporaneous effects (velocity → quality).",
-            "Contemporaneous velocity instrumented with lags 2-3 to address endogeneity.",
+            "Models 1-2, 5-6: lagged quality effects on productivity. Models 3-4, 7-8: contemporaneous productivity → quality.",
+            "Contemporaneous productivity instrumented with lags 2-3 to address endogeneity.",
             "Sargan p: p>0.05 indicates valid instruments. AR(2) p: p>0.05 indicates no serial correlation.",
             "'Exactly ID' = exactly identified model (no overidentifying restrictions to test)."
         ),
