@@ -24,6 +24,12 @@ library(modelsummary)
 library(fixest)
 library(gridExtra)
 library(Cairo)
+library(showtext)
+library(ggfx)
+
+font_add_google("Lato", "Lato")
+showtext_auto()
+showtext_opts(dpi = 300)
 ```
 
 ## Loading and Preparing the Data
@@ -45,13 +51,12 @@ panel_data$event[is.na(panel_data$event)] <- 0
 panel_data <- panel_data[panel_data$event < 202401 # never treated
         | (panel_data$event > 202407 & panel_data$event <= 202503)]
 panel_data$event <- as.integer(panel_data$event)
+panel_data$quality_warnings <- panel_data$code_smells + panel_data$vulnerabilities + panel_data$bugs
 
 # Log transform skewed variables
 panel_data$commits <- log(panel_data$commits + 1)
 panel_data$lines_added <- log(panel_data$lines_added + 1)
-panel_data$code_smells <- log(panel_data$code_smells + 1)
-panel_data$vulnerabilities <- log(panel_data$vulnerabilities + 1)
-panel_data$bugs <- log(panel_data$bugs + 1)
+panel_data$quality_warnings <- log(panel_data$quality_warnings + 1)
 panel_data$cognitive_complexity <- log(panel_data$cognitive_complexity + 1)
 panel_data$duplicated_lines_density <- log(panel_data$duplicated_lines_density + 1)
 panel_data$comment_lines_density <- log(panel_data$comment_lines_density + 1)
@@ -80,9 +85,7 @@ glimpse(panel_data)
 outcome_vars <- c(
     "commits",
     "lines_added",
-    "code_smells",
-    "vulnerabilities",
-    "bugs",
+    "quality_warnings",
     "comment_lines_density",
     "duplicated_lines_density",
     "cognitive_complexity"
@@ -90,9 +93,7 @@ outcome_vars <- c(
 outcome_names <- c(
     "Commits",
     "Lines Added",
-    "Code Smells",
-    "Vulnerabilities",
-    "Bugs",
+    "Tool Warnings",
     "Comment Lines Density",
     "Duplicated Lines Density",
     "Cognitive Complexity"
@@ -120,7 +121,6 @@ get_static_effects <- function(outcome_var, data) {
 # Calculate static effects for each outcome
 static_results <- list()
 for (var in outcome_vars) {
-    cat("Running static analysis for:", var, "\n")
     static_results[[var]] <- get_static_effects(var, panel_data)
 }
 
@@ -236,7 +236,7 @@ if (length(plot_list) > 0) {
 
 ## Compare Event Studies Across Five Settings
 
-```{r compare_event_study, fig.width=10.5, fig.height=5}
+```{r compare_event_study, fig.width=10.5, fig.height=5, eval=FALSE}
 # Build filtered variants directly from the already prepared `panel_data`
 build_setting_variant <- function(data, setting_label) {
     dt <- data
@@ -341,11 +341,109 @@ dynamic_plot <- ggplot(plot_dyn, aes(x = time, y = estimate, color = setting)) +
         plot.caption = element_text(hjust = 0.5, size = 10, margin = margin(t = 10)),
         legend.margin = margin(b = 5)
     ) +
-    facet_wrap(~ outcome_label, scales = "free_y", nrow = 2, ncol = 4)
+    facet_wrap(~ outcome_label, scales = "free_y", nrow = 2, ncol = 3)
 
 print(dynamic_plot)
 
 ggsave("../plots/dynamic_effects_comparison.pdf",
   plot = dynamic_plot, width = 10.5, height = 5,
   device = CairoPDF, family = "DejaVu Sans")
+```
+
+## Poster Figures: Event Study with Percentage Changes
+
+```{r poster_figures, fig.width=14, fig.height=9}
+# Create a single-outcome poster plot
+plot_poster_single <- function(outcome_var, outcome_name, y_label, y_limits = NULL) {
+    dyn <- dynamic_results[[outcome_var]]
+    df <- dyn[dyn$term != "treat", ]
+    df$time <- as.numeric(df$term)
+
+    # Ensure month -1 exists with zero effect
+    if (!(-1 %in% df$time)) {
+        new_row <- as.data.frame(as.list(setNames(rep(NA, ncol(df)), names(df))))
+        new_row$term <- "-1"
+        new_row$estimate <- 0
+        new_row$std.error <- 0
+        new_row$conf.low <- 0
+        new_row$conf.high <- 0
+        new_row$time <- -1
+        df <- dplyr::bind_rows(df, new_row)
+    }
+    df <- df[order(df$time), ]
+
+    # Convert to percentage changes
+    df$pct_change <- (exp(df$estimate) - 1) * 100
+    df$pct_low <- (exp(df$conf.low) - 1) * 100
+    df$pct_high <- (exp(df$conf.high) - 1) * 100
+
+    # Define colors for red background
+    line_color <- "#E8F4F8"  # Light cyan
+    text_color <- "#FFFFFF"  # White
+    grid_color <- "#FFFFFF"  # White with transparency
+
+    p <- ggplot(df, aes(x = time, y = pct_change)) +
+        geom_hline(yintercept = 0, linetype = "solid", color = line_color, linewidth = 0.6) +
+        geom_vline(xintercept = -0.5, linetype = "dashed", color = line_color, linewidth = 0.9) +
+        with_shadow(geom_ribbon(aes(ymin = pct_low, ymax = pct_high), fill = line_color, alpha = 0.3),
+                    sigma = 2, x_offset = 1, y_offset = 1, color = "black") +
+        with_shadow(geom_line(linewidth = 1.8, color = line_color),
+                    sigma = 2, x_offset = 1, y_offset = 1, color = "black") +
+        with_shadow(geom_point(size = 4, shape = 16, color = line_color),
+                    sigma = 2, x_offset = 1, y_offset = 1, color = "black") +
+        scale_x_continuous(limits = c(-6, 6), breaks = -6:6) +
+        labs(x = "Months Relative to Cursor Adoption", y = y_label) +
+        theme_minimal(base_size = 12, base_family = "Lato") +
+        theme(
+            plot.title = element_text(face = "bold", size = 12, hjust = 0.5, color = text_color),
+            axis.title = element_text(face = "bold", size = 12, color = text_color),
+            axis.text = element_text(face = "bold", size = 12, color = text_color),
+            axis.line = element_line(color = text_color, linewidth = 0.6),
+            axis.ticks = element_line(color = text_color, linewidth = 0.5),
+            panel.grid.minor = element_blank(),
+            panel.grid.major = element_line(color = grid_color, linewidth = 0.25, alpha = 0.25),
+            plot.margin = margin(15, 15, 15, 15),
+            panel.background = element_rect(fill = "transparent", colour = NA),
+            plot.background = element_rect(fill = "transparent", colour = NA)
+        )
+
+    if (!is.null(y_limits)) {
+        p <- p + coord_cartesian(ylim = y_limits, clip = "off")
+    }
+
+    return(p)
+}
+
+# Generate four independent figures
+commits_plot <- plot_poster_single(
+    outcome_var = "commits", outcome_name = "Commits",
+    y_label = "Effect on Commits (%)",
+    y_limits = c(-30, 100)
+)
+lines_added_plot <- plot_poster_single(
+    outcome_var = "lines_added", outcome_name = "Lines Added",
+    y_label = "Effect on Lines Added (%)",
+    y_limits = c(-50, 400)
+)
+tool_warnings_plot <- plot_poster_single(
+    outcome_var = "quality_warnings", outcome_name = "Tool Warnings",
+    y_label = "Effect on Technical Debt (%)",
+    y_limits = c(-25, 75)
+)
+complexity_plot <- plot_poster_single(
+    outcome_var = "cognitive_complexity", outcome_name = "Cognitive Complexity",
+    y_label = "Effect on Code Complexity (%)",
+    y_limits = c(-25, 75)
+)
+# Save individual PNGs (transparent)
+output_width <- 4
+output_height <- 3
+ggsave("../plots/poster_commits_event_study.png", commits_plot,
+       width = output_width, height = output_height, dpi = 300, bg = "transparent")
+ggsave("../plots/poster_lines_added_event_study.png", lines_added_plot,
+       width = output_width, height = output_height, dpi = 300, bg = "transparent")
+ggsave("../plots/poster_tool_warnings_event_study.png", tool_warnings_plot,
+       width = output_width, height = output_height, dpi = 300, bg = "transparent")
+ggsave("../plots/poster_cognitive_complexity_event_study.png", complexity_plot,
+       width = output_width, height = output_height, dpi = 300, bg = "transparent")
 ```
