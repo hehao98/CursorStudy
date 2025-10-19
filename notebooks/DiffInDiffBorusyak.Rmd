@@ -24,12 +24,6 @@ library(modelsummary)
 library(fixest)
 library(gridExtra)
 library(Cairo)
-library(showtext)
-library(ggfx)
-
-font_add_google("Lato", "Lato")
-showtext_auto()
-showtext_opts(dpi = 300)
 ```
 
 ## Loading and Preparing the Data
@@ -86,17 +80,17 @@ outcome_vars <- c(
     "commits",
     "lines_added",
     "quality_warnings",
-    "comment_lines_density",
+    # "comment_lines_density",
     "duplicated_lines_density",
     "cognitive_complexity"
 )
 outcome_names <- c(
     "Commits",
     "Lines Added",
-    "Tool Warnings",
-    "Comment Lines Density",
+    "Static Analysis Warnings",
+    # "Comment Lines Density",
     "Duplicated Lines Density",
-    "Cognitive Complexity"
+    "Code Complexity"
 )
 ```
 
@@ -236,7 +230,7 @@ if (length(plot_list) > 0) {
 
 ## Compare Event Studies Across Five Settings
 
-```{r compare_event_study, fig.width=10.5, fig.height=5, eval=FALSE}
+```{r compare_event_study, fig.width=11, fig.height=2.5}
 # Build filtered variants directly from the already prepared `panel_data`
 build_setting_variant <- function(data, setting_label) {
     dt <- data
@@ -312,10 +306,10 @@ plot_dyn$significant <- (plot_dyn$conf.low > 0) | (plot_dyn$conf.high < 0)
 dynamic_plot <- ggplot(plot_dyn, aes(x = time, y = estimate, color = setting)) +
     # Significant points (filled)
     geom_point(data = subset(plot_dyn, significant),
-               position = position_dodge(width = 0.5), size = 2, shape = 19) +
+               position = position_dodge(width = 0.5), size = 1.5, shape = 19) +
     # Non-significant points (hollow)
     geom_point(data = subset(plot_dyn, !significant),
-               position = position_dodge(width = 0.5), size = 2, shape = 21, fill = "transparent") +
+               position = position_dodge(width = 0.5), size = 1.5, shape = 21, fill = "transparent") +
     # Error bars for significant effects (solid)
     geom_errorbar(data = subset(plot_dyn, significant),
                   aes(ymin = conf.low, ymax = conf.high),
@@ -327,7 +321,7 @@ dynamic_plot <- ggplot(plot_dyn, aes(x = time, y = estimate, color = setting)) +
                   position = position_dodge(width = 0.5),
                   width = 0, linetype = "dotted") +
     geom_hline(yintercept = 0, linetype = "dashed") +
-    geom_vline(xintercept = 0, linetype = "dashed") +
+    geom_vline(xintercept = -0.5, linetype = "dashed") +
     scale_x_continuous(limits = c(-6, 6), breaks = -6:6) +
     labs(
         x = "Months Relative to Cursor Adoption",
@@ -338,21 +332,29 @@ dynamic_plot <- ggplot(plot_dyn, aes(x = time, y = estimate, color = setting)) +
     theme_minimal() +
     theme(
         legend.position = "bottom",
-        plot.caption = element_text(hjust = 0.5, size = 10, margin = margin(t = 10)),
-        legend.margin = margin(b = 5)
+        plot.caption = element_text(hjust = 0.5, size = 10, margin = margin(t = 3)),
+        legend.margin = margin(b = 3),
+        legend.box.margin = margin(t = -5)
     ) +
-    facet_wrap(~ outcome_label, scales = "free_y", nrow = 2, ncol = 3)
+    facet_wrap(~ outcome_label, scales = "free_y", nrow = 1, ncol = 5)
 
 print(dynamic_plot)
 
 ggsave("../plots/dynamic_effects_comparison.pdf",
-  plot = dynamic_plot, width = 10.5, height = 5,
+  plot = dynamic_plot, width = 11, height = 2.5,
   device = CairoPDF, family = "DejaVu Sans")
 ```
 
 ## Poster Figures: Event Study with Percentage Changes
 
 ```{r poster_figures, fig.width=14, fig.height=9}
+library(showtext)
+library(ggfx)
+
+font_add_google("Lato", "Lato")
+showtext_auto()
+showtext_opts(dpi = 300)
+
 # Create a single-outcome poster plot
 plot_poster_single <- function(outcome_var, outcome_name, y_label, y_limits = NULL) {
     dyn <- dynamic_results[[outcome_var]]

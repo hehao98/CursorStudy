@@ -50,7 +50,8 @@ metrics_df <- metrics_df %>%
         adoption_yearmonth = format(cursor_adoption_time, "%Y-%m")
     ) %>%
     filter(!is.na(cursor_adoption_time)) %>%
-    filter(cursor_adoption_time < ymd("2025-04-01"))
+    filter(cursor_adoption_time < ymd("2025-04-01")) %>%
+    filter(cursor_adoption_time >= ymd("2024-01-01"))
 
 # View data structure
 glimpse(metrics_df)

@@ -1,6 +1,5 @@
 ---
 title: "PanelRegression"
-author: "C. Miller"
 date: "2025-04-03"
 output: html_document
 ---
@@ -18,7 +17,7 @@ ts_repos <- read_csv("../data/ts_repos.csv")
 # importing dataset with data for all repos (no qualifying filter)
 allRepos <- read_csv("../data/repos.csv")
 
-# creating datetime object with current date 
+# creating datetime object with current date
 current_date <- as_datetime("2025-04-17 09:00:00")
 
 # casting date cols to date format
@@ -29,7 +28,7 @@ allRepos$repo_updated <- as_datetime(allRepos$repo_updated)
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-# Data setup 
+# Data setup
 
 Calculating elapsed time since cursor adoption for each repo
 ```{r}
@@ -41,10 +40,10 @@ allRepos <- allRepos %>% mutate(elapsedDaysBeforeCursorAdoption = as.numeric(all
 ```
 
 
-### ALT exploration 
+### ALT exploration
 
 ```{r}
-# creating balanced event_time metric 
+# creating balanced event_time metric
 
 # Step 1: Find the intervention week number (from `time`) for each repo
 intervention_weeks <- its_repos %>%
@@ -90,23 +89,23 @@ print("\nVerifying each repo has 35 weeks:")
 print(all(timebox_check$n_weeks == 35))
 
 
-# check to see for how many cases there are null values for some of the response variables 
+# check to see for how many cases there are null values for some of the response variables
 colSums(is.na(pr_qualifyingRepos))
 
 pr_qualifyingRepos[!complete.cases(pr_qualifyingRepos), ]
 # it appears there are 56 rows w/ NA values coming from three repos, "serversideup/docker-ssh","labnol/react-tailwind","synatic/noql"
-# since they have missing data I will exclude them from the modeling 
+# since they have missing data I will exclude them from the modeling
 
 
 # excluding data from repos with incomplete data
 pr_qualifyingRepos <- pr_qualifyingRepos %>% filter(!repo_name %in% c("serversideup/docker-ssh", "labnol/react-tailwind", "synatic/noql"))
 ```
 
-Casting and releveling event_time variable  
+Casting and releveling event_time variable
 ```{r}
 pr_repos <- pr_qualifyingRepos %>%
   mutate(event_time_factor = factor(event_time)) %>%
-  mutate(event_time_factor = relevel(event_time_factor, ref = "-1")) 
+  mutate(event_time_factor = relevel(event_time_factor, ref = "-1"))
 ```
 
 
@@ -141,7 +140,7 @@ qualityingRepos %>% filter(! repo_name %in% its_qualifyingRepos$repo_name)
 
 
 ```{r}
-# creating balanced event_time metric 
+# creating balanced event_time metric
 
 # Step 1: Find the intervention week number (from `time`) for each repo
 intervention_weeks <- its_qualifyingRepos %>%
@@ -159,7 +158,7 @@ its_qualifyingRepos <- its_qualifyingRepos %>%
 
 Identifying final subset that qualifies for modeling with at least 4 months before and after cursor adoption, pulling only the weeks -17 to 17 for each repo to create balanced dataset for modeling
 ```{r}
-# identifying the subset of projects that have at least 4 months (~17 weeks) of history before and after cursor adoption 
+# identifying the subset of projects that have at least 4 months (~17 weeks) of history before and after cursor adoption
 
 # First identify repos that have the full range of -17 to -17 weeks
 complete_repos <- its_qualifyingRepos %>%
@@ -205,7 +204,7 @@ qualityingRepos %>% filter(repo_name=="labnol/react-tailwind")
 ```
 
 
-Casting event_time variable and selecting subset of variables necessary for modeling 
+Casting event_time variable and selecting subset of variables necessary for modeling
 ```{r}
 pr_repos <- pr_qualifyingRepos %>%
   mutate(event_time_factor = factor(event_time)) %>%
@@ -228,7 +227,7 @@ model <- feols(
 
 # visualizing effects
 
-event_study_df <- broom::tidy(model) |> 
+event_study_df <- broom::tidy(model) |>
   dplyr::filter(grepl("event_time::", term))
 
 ggplot(event_study_df, aes(x = as.numeric(gsub("event_time::", "", term)), y = estimate)) +
@@ -247,7 +246,7 @@ ggplot(event_study_df, aes(x = as.numeric(gsub("event_time::", "", term)), y = e
 ```
 
 
-# panel regression looking at impact of multiple outcome variables 
+# panel regression looking at impact of multiple outcome variables
 
 ```{r}
 # Outcome variables (code quality metrics)
@@ -258,18 +257,18 @@ models <- list()
 
 # Loop through each metric and build appropriate formula
 for (metric in metrics) {
-  
+
   # Include 'contributors' as a control only if it's not the outcome
   controls <- if (metric != "contributors") "contributors" else NULL
-  
+
   # Build formula string
   rhs <- paste(
     c("i(event_time_factor, ref = '-1')", controls),
     collapse = " + "
   )
-  
+
   formula_str <- paste0(metric, " ~ ", rhs, " | repo_name + week")
-  
+
   # Estimate model
   model <- feols(as.formula(formula_str), data = pr_repos, cluster = ~repo_name)
   models[[metric]] <- model
@@ -320,4 +319,3 @@ library(patchwork)  # if you want side-by-side plots
 
 
 ```
-

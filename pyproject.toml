@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "cursor-study"
 version = "0.1.0"
-authors = ["Hao He <haohe@andrew.cmu.edu>"]
+authors = []
 readme = "README.md"
 package-mode = false
 

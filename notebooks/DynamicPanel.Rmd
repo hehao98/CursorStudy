@@ -36,11 +36,12 @@ dynamic_data <- panel_data %>%
     # filter(is_treatment == 1) %>%
     # Remove rows where code_smells or bugs are NA
     filter(!is.na(code_smells) &
-        !is.na(bugs) & !is.na(cognitive_complexity) &
+        !is.na(vulnerabilities) & !is.na(bugs) & !is.na(cognitive_complexity) &
         !is.na(lines_added) & !is.na(commits)) %>%
     mutate(
         id = as.factor(repo_name),
-        time = as.numeric(factor(time_date))
+        time = as.numeric(factor(time_date)),
+        static_analysis_warnings = code_smells + vulnerabilities + bugs
     ) %>%
     distinct(repo_name, time_date, .keep_all = TRUE)
 
@@ -52,8 +53,7 @@ pdyn <- pdyn %>%
         commits = log(commits + 1),
         lines_added = log(lines_added + 1),
         cognitive_complexity = log(cognitive_complexity + 1),
-        code_smells = log(code_smells + 1),
-        bugs = log(bugs + 1)
+        static_analysis_warnings = log(static_analysis_warnings + 1)
     )
 
 glimpse(pdyn)
@@ -64,7 +64,7 @@ glimpse(pdyn)
 ```{r correlations}
 # Print correlations between code metrics
 cor_matrix <- pdyn %>%
-    select(cognitive_complexity, code_smells, bugs, commits, lines_added) %>%
+    select(cognitive_complexity, static_analysis_warnings, commits, lines_added) %>%
     cor(use = "complete.obs")
 
 print("Correlation Matrix for Code Quality Metrics:")
@@ -92,7 +92,7 @@ summary(dynamic_model_lines, robust = TRUE)
 
 ```{r dynamic_model_lines_added2}
 dynamic_model_lines2 <- pgmm(
-    formula = lines_added ~ lag(lines_added, 1) + lag(code_smells, 1) +
+    formula = lines_added ~ lag(lines_added, 1) + lag(static_analysis_warnings, 1) +
         post_event +
         log(ncloc + 1) + log(age + 1) + log(contributors + 1) + log(stars + 1) +
         log(issues + 1) |
@@ -128,17 +128,17 @@ dynamic_model_complexity <- pgmm(
 summary(dynamic_model_complexity, robust = TRUE)
 ```
 
-```{r dynamic_model_code_smells}
+```{r dynamic_model_static_analysis_warnings}
 # Test: Velocity_{i,t} → TechnicalDebt_{it}
 # Use lagged velocity as instrument for contemporaneous velocity
 
-dynamic_model_code_smells <- pgmm(
-    formula = code_smells ~ lag(code_smells, 1) +
+dynamic_model_static_analysis_warnings <- pgmm(
+    formula = static_analysis_warnings ~ lag(static_analysis_warnings, 1) +
         lines_added +  # Contemporaneous effect (potentially endogenous)
         post_event +
         log(ncloc + 1) + log(age + 1) + log(contributors + 1) + log(stars + 1) +
         log(issues + 1) |
-        lag(code_smells, 2:3) + lag(lines_added, 2:3),
+        lag(static_analysis_warnings, 2:3) + lag(lines_added, 2:3),
     data = pdyn,
     effect = "twoways",
     model = "twosteps",
@@ -146,7 +146,7 @@ dynamic_model_code_smells <- pgmm(
     collapse = TRUE
 )
 
-summary(dynamic_model_code_smells, robust = TRUE)
+summary(dynamic_model_static_analysis_warnings, robust = TRUE)
 ```
 
 ## Alternative Models Using Commits as Productivity Measure
@@ -170,7 +170,7 @@ summary(dynamic_model_commits, robust = TRUE)
 
 ```{r dynamic_model_commits2}
 dynamic_model_commits2 <- pgmm(
-    formula = commits ~ lag(commits, 1) + lag(code_smells, 1) +
+    formula = commits ~ lag(commits, 1) + lag(static_analysis_warnings, 1) +
         post_event +
         log(ncloc + 1) + log(age + 1) + log(contributors + 1) + log(stars + 1) +
         log(issues + 1) |
@@ -186,9 +186,6 @@ summary(dynamic_model_commits2, robust = TRUE)
 ```
 
 ```{r dynamic_model_complexity_commits}
-# Test: Commits_{i,t} → Complexity_{it}
-# Use lagged commits as instrument for contemporaneous commits
-
 dynamic_model_complexity_commits <- pgmm(
     formula = cognitive_complexity ~ lag(cognitive_complexity, 1) +
         commits +  # Contemporaneous effect (potentially endogenous)
@@ -206,17 +203,14 @@ dynamic_model_complexity_commits <- pgmm(
 summary(dynamic_model_complexity_commits, robust = TRUE)
 ```
 
-```{r dynamic_model_code_smells_commits}
-# Test: Commits_{i,t} → TechnicalDebt_{it}
-# Use lagged commits as instrument for contemporaneous commits
-
-dynamic_model_code_smells_commits <- pgmm(
-    formula = code_smells ~ lag(code_smells, 1) +
+```{r dynamic_model_static_analysis_warnings_commits}
+dynamic_model_static_analysis_warnings_commits <- pgmm(
+    formula = static_analysis_warnings ~ lag(static_analysis_warnings, 1) +
         commits +  # Contemporaneous effect (potentially endogenous)
         post_event +
         log(ncloc + 1) + log(age + 1) + log(contributors + 1) + log(stars + 1) +
         log(issues + 1) |
-        lag(code_smells, 2:3) + lag(commits, 2:3),
+        lag(static_analysis_warnings, 2:3) + lag(commits, 2:3),
     data = pdyn,
     effect = "twoways",
     model = "twosteps",
@@ -224,7 +218,7 @@ dynamic_model_code_smells_commits <- pgmm(
     collapse = TRUE
 )
 
-summary(dynamic_model_code_smells_commits, robust = TRUE)
+summary(dynamic_model_static_analysis_warnings_commits, robust = TRUE)
 ```
 
 ## Summary Table of All Dynamic Panel Models
@@ -233,13 +227,13 @@ summary(dynamic_model_code_smells_commits, robust = TRUE)
 # Create summary table using modelsummary with diagnostics included
 models_list <- list(
     "Lines Added\n(Complexity)" = dynamic_model_lines,
-    "Lines Added\n(Code Smells)" = dynamic_model_lines2,
+    "Lines Added\n(Static Analysis Warnings)" = dynamic_model_lines2,
     "Cognitive\nComplexity\n(Lines)" = dynamic_model_complexity,
-    "Code Smells\n(Lines)" = dynamic_model_code_smells,
+    "Static Analysis Warnings\n(Lines)" = dynamic_model_static_analysis_warnings,
     "Commits\n(Complexity)" = dynamic_model_commits,
-    "Commits\n(Code Smells)" = dynamic_model_commits2,
+    "Commits\n(Static Analysis Warnings)" = dynamic_model_commits2,
     "Cognitive\nComplexity\n(Commits)" = dynamic_model_complexity_commits,
-    "Code Smells\n(Commits)" = dynamic_model_code_smells_commits
+    "Static Analysis Warnings\n(Commits)" = dynamic_model_static_analysis_warnings_commits
 )
 
 # Extract diagnostics manually for all models
@@ -274,11 +268,11 @@ get_diagnostics <- function(model) {
 diag1 <- get_diagnostics(dynamic_model_lines)
 diag2 <- get_diagnostics(dynamic_model_lines2)
 diag3 <- get_diagnostics(dynamic_model_complexity)
-diag4 <- get_diagnostics(dynamic_model_code_smells)
+diag4 <- get_diagnostics(dynamic_model_static_analysis_warnings)
 diag5 <- get_diagnostics(dynamic_model_commits)
 diag6 <- get_diagnostics(dynamic_model_commits2)
 diag7 <- get_diagnostics(dynamic_model_complexity_commits)
-diag8 <- get_diagnostics(dynamic_model_code_smells_commits)
+diag8 <- get_diagnostics(dynamic_model_static_analysis_warnings_commits)
 
 # Extract coefficients manually with robust SEs
 extract_coefs <- function(model) {
@@ -298,11 +292,11 @@ extract_coefs <- function(model) {
 coef1 <- extract_coefs(dynamic_model_lines)
 coef2 <- extract_coefs(dynamic_model_lines2)
 coef3 <- extract_coefs(dynamic_model_complexity)
-coef4 <- extract_coefs(dynamic_model_code_smells)
+coef4 <- extract_coefs(dynamic_model_static_analysis_warnings)
 coef5 <- extract_coefs(dynamic_model_commits)
 coef6 <- extract_coefs(dynamic_model_commits2)
 coef7 <- extract_coefs(dynamic_model_complexity_commits)
-coef8 <- extract_coefs(dynamic_model_code_smells_commits)
+coef8 <- extract_coefs(dynamic_model_static_analysis_warnings_commits)
 
 # Format coefficients with stars
 format_coef <- function(est, pval) {
@@ -323,7 +317,7 @@ var_names <- c(
     "lines_added" = "Lines Added (t)",
     "commits" = "Commits (t)",
     "lag(cognitive_complexity, 1)" = "Cognitive Complexity (t-1)",
-    "lag(code_smells, 1)" = "Code Smells (t-1)",
+    "lag(static_analysis_warnings, 1)" = "Static Analysis Warnings (t-1)",
     "post_event" = "Post-Cursor Adoption",
     "log(ncloc + 1)" = "Log(Lines of Code)",
     "log(age + 1)" = "Log(Age)",
@@ -383,10 +377,10 @@ table_rows <- bind_rows(
 # Create table with kable
 kableExtra::kbl(
     table_rows,
-    col.names = c("", "Lines Added\n(Complexity)", "Lines Added\n(Code Smells)",
-                  "Cognitive\nComplexity\n(Lines)", "Code Smells\n(Lines)",
-                  "Commits\n(Complexity)", "Commits\n(Code Smells)",
-                  "Cognitive\nComplexity\n(Commits)", "Code Smells\n(Commits)"),
+    col.names = c("", "Lines Added\n(Complexity)", "Lines Added\n(Static Analysis Warnings)",
+                  "Cognitive\nComplexity\n(Lines)", "Static Analysis Warnings\n(Lines)",
+                  "Commits\n(Complexity)", "Commits\n(Static Analysis Warnings)",
+                  "Cognitive\nComplexity\n(Commits)", "Static Analysis Warnings\n(Commits)"),
     align = c("l", "c", "c", "c", "c", "c", "c", "c", "c"),
     caption = "Dynamic Panel GMM Estimates: Effects of Code Quality on Productivity (Lines Added vs Commits)",
     escape = FALSE
