@@ -167,65 +167,73 @@ for (var in outcome_vars) {
 }
 ```
 
-```{r event_study, fig.width=12, fig.height=8}
-# Function to plot event study for a given outcome
-plot_event_study <- function(did_result, title) {
-    # Filter for dynamic effects (exclude static "treat" term only)
-    dynamic_data <- did_result[did_result$term != "treat", ]
-
-    if (nrow(dynamic_data) == 0) {
-        cat("No dynamic effects available for", title, "\n")
-        return(NULL)
-    }
-
-    # Create a data frame for plotting
-    plot_data <- data.frame(
-        time = as.numeric(dynamic_data$term),
-        estimate = dynamic_data$estimate,
-        conf.low = dynamic_data$conf.low,
-        conf.high = dynamic_data$conf.high,
-        is_significant = (dynamic_data$conf.low > 0) | (dynamic_data$conf.high < 0)
-    )
-
-    # Plot
-    ggplot(plot_data, aes(x = time, y = estimate)) +
-        geom_point(aes(shape = is_significant), size = 3) +
-        scale_shape_manual(values = c("FALSE" = 1, "TRUE" = 16),
-                          labels = c("FALSE" = "Not Significant", "TRUE" = "Significant *")) +
-        geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.2) +
-        geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
-        geom_vline(xintercept = 0, linetype = "dashed", color = "blue") +
-        scale_x_continuous(limits = c(-6, 6), breaks = -6:6) +
-        labs(
-            title = paste("Event Study:", title),
-            x = "Months Relative to Cursor Adoption",
-            y = "Treatment Effect",
-            shape = "Significance"
-        ) +
-        theme_minimal()
-}
-
-# Create plot list (only include valid plots)
-plot_list <- list()
+```{r event_study, fig.width=11, fig.height=2.5}
+# Prepare data for all outcomes in a single faceted plot
+event_study_data <- list()
 for (i in seq_along(outcome_vars)) {
     if (outcome_vars[i] %in% names(dynamic_results)) {
-        plot_obj <- plot_event_study(dynamic_results[[outcome_vars[i]]], outcome_names[i])
-        if (!is.null(plot_obj)) {
-            plot_list[[length(plot_list) + 1]] <- plot_obj
+        did_result <- dynamic_results[[outcome_vars[i]]]
+        # Filter for dynamic effects (exclude static "treat" term only)
+        dynamic_data <- did_result[did_result$term != "treat", ]
+
+        if (nrow(dynamic_data) > 0) {
+            # Create a data frame for this outcome
+            df <- data.frame(
+                time = as.numeric(dynamic_data$term),
+                estimate = dynamic_data$estimate,
+                conf.low = dynamic_data$conf.low,
+                conf.high = dynamic_data$conf.high,
+                is_significant = (dynamic_data$conf.low > 0) | (dynamic_data$conf.high < 0),
+                outcome = outcome_vars[i],
+                outcome_label = outcome_names[i]
+            )
+            event_study_data[[length(event_study_data) + 1]] <- df
         }
     }
 }
 
-# Combine plots if we have any
-if (length(plot_list) > 0) {
-    if (length(plot_list) == 1) {
-        # If only one plot, just display it
-        plot_list[[1]]
-    } else {
-        # If multiple plots, use grid.arrange
-        gridExtra::grid.arrange(grobs = plot_list, ncol = 2)
-    }
-}
+# Combine all data
+plot_data <- dplyr::bind_rows(event_study_data)
+
+# Enforce facet order to match outcome_vars
+plot_data$outcome_label <- factor(plot_data$outcome_label, levels = outcome_names)
+
+# Create single faceted plot
+event_study_plot <- ggplot(plot_data, aes(x = time, y = estimate)) +
+    # Significant points (filled)
+    geom_point(data = subset(plot_data, is_significant),
+               size = 1.5, shape = 19) +
+    # Non-significant points (hollow)
+    geom_point(data = subset(plot_data, !is_significant),
+               size = 1.5, shape = 21, fill = "transparent") +
+    # Error bars for significant effects (solid)
+    geom_errorbar(data = subset(plot_data, is_significant),
+                  aes(ymin = conf.low, ymax = conf.high),
+                  width = 0, linetype = "solid") +
+    # Error bars for non-significant effects (dotted)
+    geom_errorbar(data = subset(plot_data, !is_significant),
+                  aes(ymin = conf.low, ymax = conf.high),
+                  width = 0, linetype = "dotted") +
+    geom_hline(yintercept = 0, linetype = "dashed") +
+    geom_vline(xintercept = -0.5, linetype = "dashed") +
+    scale_x_continuous(limits = c(-6, 6), breaks = -6:6) +
+    scale_y_continuous(expand = expansion(mult = c(0.05, 0.05))) +
+    labs(
+        x = "Months Relative to Cursor Adoption",
+        y = "Treatment Effect",
+        caption = "Filled dots: p < 0.05 (significant), Hollow dots: p ≥ 0.05 (non-significant)"
+    ) +
+    theme_minimal() +
+    theme(
+        plot.caption = element_text(hjust = 0.5, size = 10, margin = margin(t = 3))
+    ) +
+    facet_wrap(~ outcome_label, scales = "free_y", nrow = 1, ncol = 5)
+
+print(event_study_plot)
+
+ggsave("../plots/dynamic_effects_borusyak.pdf",
+  plot = event_study_plot, width = 11, height = 2.5,
+  device = CairoPDF, family = "DejaVu Sans")
 ```
 
 ## Compare Event Studies Across Five Settings
